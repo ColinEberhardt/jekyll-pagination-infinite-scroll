@@ -7,6 +7,7 @@ layout: default
     <article>
       <header>
         <h2><a href="{{ site.siteurl }}{{ post.url }}">{{ post.title }}</a></h2>
+        <h5>{{ post.date | date: "%d %b %Y" }}</h5>
         <p>{{ post.content | truncatewords:50 | strip_html }}</p>
       </header>
     </article>
@@ -35,7 +36,7 @@ layout: default
 
 
 <script src="{{ site.siteurl }}/js/jquery-1.11.1.js"></script>
-<script src="{{ site.siteurl }}/js/jscroll-2.2.4/jquery.jscroll.js"></script>
+<script src="{{ site.siteurl }}/js/jscroll/jquery.jscroll.js"></script>
 
 <script type="text/javascript">
 // content selector is used to extract the additional items 
