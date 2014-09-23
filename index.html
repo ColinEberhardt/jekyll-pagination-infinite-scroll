@@ -28,7 +28,7 @@ layout: default
     {% if paginator.next_page %}
       <a class='next' href="{{ site.siteurl }}/page{{ paginator.next_page }}/">Next &raquo;</a>
     {% else %}
-      <span>Next &raquo;</span>
+      <span class='next'>Next &raquo;</span>
     {% endif %}
   </div>
   {% endif %}
@@ -42,6 +42,6 @@ layout: default
 // content selector is used to extract the additional items 
 $('.content').jscroll({
     contentSelector: ".content",
-    nextSelector: 'a.next'
+    nextSelector: '.next'
 });
 </script>
