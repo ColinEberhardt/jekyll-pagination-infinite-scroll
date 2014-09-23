@@ -1,0 +1,346 @@
+---
+id: 2235
+author: ceberhardt
+title: An Introduction and Thoughts on Developing iOS Applications with MonoTouch
+oldlink: "/blog/colin/2012/07/an-introduction-to-developing-ios-applications-with-monotouch/"
+tags: 
+  - WP7
+  - iOS
+  - MonoTouch
+  - blog
+  - codeproject
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p><em>This blog post describes the creation of a simple twitter search application for iOS, based on a similar application I wrote for Windows Phone a few months back. In this blog post I'll used the MonoTouch platform, which allows you to write iOS applications using C#. This blog posts describes my experiences, and how it compares to Windows Phone and .NET development in general.</em></p>
+<div style="float:right; width:160px; margin:10px; padding:10px; border: solid 1px #aaa; font-size:0.8em;"><img src="{{ site.baseurl }}/archive/2012/07/me.jpg" style="float:left; margin:5px;">Colin Eberhardt is CIO at <a href="http://www.shinobicontrols.com">ShinobiControls</a>, suppliers of highly interactive and fun charts, grids and UI controls for iOS developers.<br/><a href="http://www.shinobicontrols.com"><img src="{{ site.baseurl }}/archive/2012/07/shinobicontrols.png" /></a></div>
+<p>With the rise in popularity of smartphones, tablets and the web as a platform, now is the time for developers to diversify and learn new skills. A few years ago, .NET was a dominant force, but <a href="http://www.zdnet.com/tech-gigs-ios-apps-html5-in-seo-social-media-net-out-7000001138/">recent statistics have shown a real drop in demand for .NET developers</a>. I have been busy picking up new skills, mostly in HTML5-related technologies, but more recently I have been eyeing up iOS as a result of my work with <a href="http://www.shinobicontrols.com/">ShinobiControls</a>, which are an iOS UI component vendor.</p>
+<p>Whilst the transition from .NET to HTML5 means learning new languages and frameworks, for the most part, the tools (Visual Studio + Windows PC) remain the same. Transitioning from .NET to iOS means that everything changes! There's a new language, Objective-C, the Cocoa Touch framework, new tools, Xcode, and the Mac OS itself. When learning new skills we tend to gravitate towards the most familiar concepts, these allow us to adapt and use our existing skill. The first time I fired up a Mac, fumbled around to find Xcode, and stared blankly at some Objective-C, I realised there are very few familiar footholds for a .NET developer to leverage when climbing the iOS learning mountain. MonoTouch helps make the transition from .NET to iOS development a little less daunting by allowing you to leverage your existing C# skills.</p>
+<p>The Mono framework has had a long history, originally been released in 2004 as an open source implementation of the Microsoft .NET framework. The Mono framework covers many of the core .NET frameworks (ASP.NET, WPF, WinForms), but more recently it has extended its reach to mobile devices, providing an alternative to HTML5 for cross platform mobile application development. Released under the <a href="http://xamarin.com/">Xamarin</a> banner you can download the tools required to develop C# application for iOS (MonoTouch) and Android (Mono for Android). I originally 'pigeonholed' MonoTouch as a technology for cross-platform applications, however, on meeting a number of MonoTouch developers I have found that the majority use this technology simply to leverage their C# and .NET skills for iOS development.</p>
+<p>In this blog post I'll share my impressions of MonoTouch and the first application which I wrote. As a starting point I decided to create an iOS port of the simple Twitter-Search application I developed a few months back to demonstrate the <a href="http://www.scottlogic.co.uk/blog/colin/2011/05/a-simple-windows-phone-7-mvvm-tombstoning-example/">use of the MVVM pattern for Windows Phone development</a>.</p>
+<p><img src="{{ site.baseurl }}/archive/2012/07/TwitterSearch.jpg" alt="" title="TwitterSearch" width="500" height="435" class="aligncenter size-full wp-image-2236" /></p>
+<h2>From MVVM to MVP</h2>
+<p>In order to get started with MonoTouch development, you need a Mac, Xcode and MonoDevelop (the graphical IDE for MonoTouch development). You can find <a href="http://docs.xamarin.com/ios/getting_started/Introduction_to_MonoTouch">information regarding the required tools and where to find them on the Xamarin website</a>.</p>
+<p>The Windows Phone twitter search application which I previously wrote uses the Model-View-ViewModel (MVVM) pattern, which is pretty much the de-facto pattern for Windows Phone, Silverlight and WPF development. The first step I took in migrating this application to iOS was to copy the view models into the project that I created via the MonoTouch project template. I was happy to see that these classes, which make use of Linq, Linq-to-XML and various other base-classes compiled immediately!</p>
+<p>With an MVVM application the View Model state is kept in synch with the UI via the built-in binding framework. Unfortunately iOS doesn't have a binding framework, as a result iOS developers do not use the MVVM pattern. </p>
+<p>With the MVVM pattern the direction of 'visibility' is as follows:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/07/MVVM.png" alt="" title="MVVM" width="500" height="52" class="aligncenter size-full wp-image-2237" /></p>
+<p>i.e. the View Model is aware of the Model, but the Model is not aware of the View Model. Likewise, the View is aware of the View Model, but not vice-versa. In the absence of a binding framework, you have to manually 'bind' the view model to the UI, handling property and collection changes and updating the view accordingly. As an alternative, we give the View Model a reference to the View, allowing it to 'push' these changes directly to the view. This change of visibility means that we are no longer using the MVVM pattern, the View Model is now a Presenter as described by the Model View Presenter (MVP) pattern:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/07/MVP.png" alt="" title="MVP" width="500" height="52" class="aligncenter size-full wp-image-2238" /></p>
+<p>I tend to use the pattern where the view for a presenter is declared as an inner-interface of the presenter class (a convention <a href="http://www.scottlogic.co.uk/blog/colin/2012/03/developing-a-gwt-todomvc-application/">I learnt from using Google Web Toolkit</a>). Properties that would raise <code>PropertyChanged </code>events in a View Model now invoke methods on the View interface to indicate their state change.  The View interface can also define events in order to indicate user interactions in place of commands. The complete presenter for my iOS application is given below:</p>
+{% highlight csharp %}
+public class TwitterSearchPresenter
+{
+  /// <summary>
+  /// The interface that this presenter depends upon
+  /// </summary>
+  public interface View
+  {
+    string SearchText { get; }
+
+    void SetIsSearching(bool isSearching);
+
+    void SetSearchResults(List<TweetViewModel> results);
+
+    event EventHandler StartSearch;
+  }
+
+  private readonly string _twitterUrl = "http://search.twitter.com/search.atom?rpp=100&&q=";
+
+  private View _view;
+
+  public TwitterSearchPresenter()
+  {
+  }
+
+  // assocaites this presenter with a view
+  public void SetView(View view)
+  {
+    this._view = view;
+
+    // handles events from the view
+    view.StartSearch += View_StartSearch;
+  }
+
+  private void View_StartSearch(object sender, EventArgs e)
+  {
+    string uri = _twitterUrl + _view.SearchText;
+
+    _view.SetIsSearching(true);
+
+    WebClient client = new WebClient();
+    client.DownloadStringCompleted += Client_SearchComplete;
+    client.DownloadStringAsync(new Uri(uri), null);
+  }
+
+  private void Client_SearchComplete(object sender, DownloadStringCompletedEventArgs e)
+  {
+    var tweets = ParseXMLResponse(e.Result);
+    _view.SetSearchResults(tweets);
+    _view.SetIsSearching(false);
+  }
+
+  /// <summary>
+  /// Parses the response from our twitter request, creating a list of TweetViewModel instances
+  /// </summary>
+  private List<TweetModel> ParseXMLResponse(string xml)
+  {
+
+    var doc = XDocument.Parse(xml);
+    var items = doc.Descendants(AtomConst.Entry)
+                      .Select(entryElement => new TweetModel()
+                      {
+                        Title = entryElement.Descendants(AtomConst.Title).Single().Value,
+                        Id = long.Parse(entryElement.Descendants(AtomConst.ID).Single().Value.Split(':')[2]),
+                        ProfileImageUrl = entryElement.Descendants(AtomConst.Link).Skip(1).First().Attribute("href").Value,
+                        Timestamp = DateTime.Parse(entryElement.Descendants(AtomConst.Published).Single().Value),
+                        AuthorId = ExtractTwitterAuthorId(entryElement.Descendants(AtomConst.Name).Single().Value),
+                        AuthorName = ExtractTwitterAuthorName(entryElement.Descendants(AtomConst.Name).Single().Value)
+                      }
+    );
+
+    return items.ToList();
+  }
+
+  private static string ExtractTwitterAuthorId(string name)
+  {
+    return name.Substring(0, name.IndexOf(" "));
+  }
+
+  private static string ExtractTwitterAuthorName(string name)
+  {
+    int bracketIndex = name.IndexOf("(") + 1;
+    return name.Substring(bracketIndex, name.Length - bracketIndex - 1);
+  }
+}
+{% endhighlight %}
+<h2>Creating a View</h2>
+<p>Now that we have a presenter, we need a view!</p>
+<p>Windows Phone applications are composed of <code>PhoneApplicationPage </code>instances, the iOS equivalent is a <code>UIViewController</code>. MonoDevelop does not have a built-in editor for view controllers, however, double-clicking the XIB files (which are roughly equivalent to XAML files), launches the Xcode Interface Builder. This tool allows you to create the UI via a simple drag and drop interface. The UI for my application is shown below:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/07/InterfaceBuilder.jpg" alt="" title="InterfaceBuilder" width="550" height="359" class="aligncenter size-full wp-image-2239" /></p>
+<p>Interface Builder also allows you to wire up controls and their 'events' to your Objective-C code, using outlets and actions. The screenshot above shows how I have created outlets for the text-field, activity-indicator and table-view controls, together with an action which is invoked when the search button is pressed.</p>
+<p>When you save the view-controller file, MonoDevelop steps in and performs its magic, generating a C# partial class with properties for each outlet and partial methods for actions:</p>
+{% highlight csharp %}
+[Register("TwitterSearchViewController")]
+partial class TwitterSearchViewController
+{
+  [Outlet]
+  MonoTouch.UIKit.UITextField txtSearch { get; set; }
+
+  [Outlet]
+  MonoTouch.UIKit.UITableView tweetList { get; set; }
+
+  [Outlet]
+  MonoTouch.UIKit.UIActivityIndicatorView activityIndicator { get; set; }
+
+  [Action("searchButtonPressed:")]
+  partial void searchButtonPressed(MonoTouch.Foundation.NSObject sender);
+
+  void ReleaseDesignerOutlets()
+  {
+    ...
+  }
+}
+{% endhighlight %}
+<p>The net result is that you can wire-up UI controls in much the same way you would using the VS designer. </p>
+<p>Your view logic is placed in the associated partial class, in my example this implements the view interface declared by the presenter. It didn't take me too long to navigate round the API for the various UI controls, using the <a href="http://iosapi.xamarin.com/">Xamarin MonoTouch reference</a> as a guide:</p>
+{% highlight csharp %}
+public partial class TwitterSearchViewController : UIViewController, TwitterSearchPresenter.View
+{
+  public TwitterSearchViewController()
+    : base("TwitterSearchViewController", null)
+  {
+    this.Title = "Twitter Search";
+  }
+
+  ...
+
+  public string SearchText
+  {
+    get
+    {
+      return txtSearch.Text;
+    }
+  }
+
+  public void SetSearchResults(List<TweetViewModel> results)
+  {
+    tweetList.Source = new TableSource(NavigationController, results.ToArray());
+    tweetList.ReloadData();
+  }
+
+  public void SetIsSearching(bool isSearching)
+  {
+    if (isSearching)
+    {
+      activityIndicator.StartAnimating();
+      tweetList.Hidden = true;
+    }
+    else
+    {
+      activityIndicator.StopAnimating();
+      tweetList.Hidden = false;
+    }
+  }
+
+  partial void searchButtonPressed(NSObject sender)
+  {
+    // hide the keyboard
+    txtSearch.ResignFirstResponder();
+
+    // start the search
+    OnStartSearch();
+  }
+
+  public event EventHandler StartSearch;
+
+  protected void OnStartSearch()
+  {
+    if (StartSearch != null)
+    {
+      StartSearch(this, EventArgs.Empty);
+    }
+  }
+
+  ...
+}
+{% endhighlight %}
+<h2>Handling the Enter key</h2>
+<p>When the user taps on the search box, the keyboard is shown. When they hit the enter key we would like to hide the keyboard. This is not the default behaviour for the text field control.</p>
+<p>In the .NET world you would expect controls to raise events that you can handle in order to react to user input, for example the <code>TextBox </code>control raises a <code>KeyUp </code>event which could be used to detect an enter key press. The Objective-C approach to this is for UI controls to declare a delegate, which is defined by a protocol. You can supply a delegate to a control and it will be notified of user interactions. For example, the UITextField exposes a <a href="http://developer.apple.com/library/ios/#DOCUMENTATION/UIKit/Reference/UITextFieldDelegate_Protocol/UITextFieldDelegate/UITextFieldDelegate.html#//apple_ref/occ/intf/UITextFieldDelegate">UITextFieldDelegate</a> which receives notifications of user interaction. </p>
+<p>Protocols are similar to C# interfaces, but with one subtle difference, they can have optional methods. As a result your delegate does not have to handle all of the 'events' that a UI control can raise. Unfortunately because C# interfaces cannot have optional methods, it is not possible to map directly from the Objective-C to the C# APIs. MonoTouch solves this by supplying base-classes for each delegate, which implements all the methods defined by a delegate's protocol. You can sub-class this base implementation so that you just need to add the methods you are interested in.</p>
+<p>For example, in order to hide the keyboard on enter key press, we create a delegate implementation and assign it to the UI control as follows:</p>
+{% highlight csharp %}
+public override void ViewDidLoad()
+{
+  base.ViewDidLoad();
+
+  txtSearch.Delegate = new CatchEnterDelegate();
+}
+
+
+public class CatchEnterDelegate : UITextFieldDelegate
+{
+  public override bool ShouldReturn(UITextField textField)
+  {
+    textField.ResignFirstResponder();
+    return true;
+  }
+}
+{% endhighlight %}
+<p>This feels like a slightly peculiar pattern for an .NET developer, but it is perfectly workable.</p>
+<h2>Creating a List of Tweets</h2>
+<p>For rendering lists of items CocoaTouch provides the <code>UITableView </code>control. This is somewhat equivalent to the Silverlight <code>ItemsControl </code>in terms of where you might use it in your application, however, the API and capabilities are quite different.</p>
+<p>In order to render data within a <code>UITableView</code> you must supply a datasource, which is defined by a protocol. MonoTouch again exposes this via a base-class that implements all of the protocol methods, in the case of the <code>UITableView </code>it also combines this with the delegate protocol. The <code>UITableView</code> is virtualised, which means you do not present it with your full set of data, instead you simply inform the table of the number of rows. As the user scrolls the table, the <code>UITableView </code>determines which rows are visible and requests the corresponding cells via the datasource protocol. The <code>UITableView </code>also has a built-in mechanism for re-cycling cells in order to reduce memory usage. </p>
+<p>The datasource implementation for the twitter application is shown below:</p>
+{% highlight csharp %}
+public void SetSearchResults(List<TweetViewModel> results)
+{
+  tweetList.Source = new TableSource(NavigationController, results.ToArray());
+  tweetList.ReloadData();
+}
+
+public class TableSource : UITableViewSource
+{
+  private TweetViewModel[] _tableItems;
+  private static readonly string _cellIdentifier = "TableCell";
+  private UINavigationController _navigationController;
+
+  public TableSource(UINavigationController navigationController, TweetViewModel[] items)
+  {
+    _tableItems = items;
+    _navigationController = navigationController;
+  }
+
+  public override int RowsInSection(UITableView tableview, int section)
+  {
+    return _tableItems.Length;
+  }
+
+  public override UITableViewCell GetCell(UITableView tableView, MonoTouch.Foundation.NSIndexPath indexPath)
+  {
+    UITableViewCell cell = tableView.DequeueReusableCell(_cellIdentifier);
+    // if there are no cells to reuse, create a new one
+    if (cell == null)
+    {
+      cell = new UITableViewCell(UITableViewCellStyle.Subtitle, _cellIdentifier);
+    }
+    var tweet = _tableItems[indexPath.Row];
+    cell.TextLabel.Text = tweet.AuthorName;
+    cell.DetailTextLabel.Text = tweet.Title;
+    cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+    cell.ImageView.Image = UIImage.LoadFromData(NSData.FromUrl(new NSUrl(tweet.ProfileImageUrl)));
+    return cell;
+  }
+}
+{% endhighlight %}
+<p>The <code>UITableView</code> has a standard cell type which has text, a sub-title, an image and an 'accessory' (the item rendered on the right-hand edge) - each of these components is optional.</p>
+<p>Again, much of the API was discoverable via the MonoTouch documentation. However, when I wanted to find out how to render an image from a URL the first thing I did was google it, finding the following answer via StackOverflow:</p>
+{% highlight objective-c %}
+UIImage *image = [UIImage imageWithData:[NSData dataWithContentsOfURL:[NSURL URLWithString:MyURL]]];
+{% endhighlight %}
+<p>It did take a little while to work out how to translate the above to my required C# equivalent:</p>
+{% highlight csharp %}
+cell.ImageView.Image = UIImage.LoadFromData(NSData.FromUrl(new NSUrl(tweet.ProfileImageUrl)));
+{% endhighlight %}
+<h2>Navigation Structure</h2>
+<p>So far my discussion of the iOS application has been based on a single view-controller. When the user clicks on a tweet, the application should navigate to a 'detail' page:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/07/Navigation.jpg" alt="" title="Navigation" width="600" height="424" class="aligncenter size-full wp-image-2240" /></p>
+<p>iOS applications can make use of a <code>UINavigationController</code>, which is similar to the Windows Phone <code>NavigationContext </code>in that it controls the navigation flow of an application, including the back-stack. However, there is a subtle difference, while the <code>NavigationContext </code>is not a UI control, the iOS <code>UINavigationController</code> is responsible for rendering the header-panel and the back-button. This results in a more uniform look and feel for iOS applications and makes it a bit easier to implement basic navigation-based applications.</p>
+<p>Using the <code>UINavigationController </code>is simple, you create an instance and set it as your 'root' view controller. You can then navigate from one view to the next by 'pushing' it: </p>
+{% highlight csharp %}
+[Register("AppDelegate")]
+public partial class AppDelegate : UIApplicationDelegate
+{
+  // class-level declarations
+  UIWindow window;
+
+  public override bool FinishedLaunching(UIApplication app, NSDictionary options)
+  {
+    // create a new window instance based on the screen size
+    window = new UIWindow(UIScreen.MainScreen.Bounds);
+
+    // create our presenter and view
+    var presenter = new TwitterSearchPresenter();
+    var viewController = new TwitterSearchViewController();
+    presenter.SetView(viewController);
+
+    // create the navigation controller
+    var navigationController = new UINavigationController();
+    navigationController.PushViewController(viewController, false);
+
+    window.RootViewController = navigationController;
+
+    // make the window visible
+    window.MakeKeyAndVisible();
+
+    return true;
+  }
+}
+{% endhighlight %}
+<p>In order to navigate from a tweet to the detail page, we simply handle the row selection within our table source / delegate:</p>
+{% highlight csharp %}
+public class TableSource : UITableViewSource
+{
+  ...
+
+  public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
+  {
+    var tweet = _tableItems[indexPath.Row];
+
+    var controller = new TweetViewController(tweet);
+
+    _navigationController.PushViewController(controller, true);
+  }
+}
+{% endhighlight %}
+<h2>Conclusions</h2>
+<p>Using MonoTouch I was able to implement this simple twitter search application in the space of just a few hours. I have a feeling that if I had tried to use Objective-C, which lacks a garbage collector and a familiar syntax, it would have taken me days rather than hours.  For a .NET developer starting out in the world of iOS, MonoTouch certainly helps. However, by choosing MonoTouch over Objective-C you do make a few compromises, including an increased application size (to include the Mono framework) and the need to generate your own C# bindings for third-party libraries. </p>
+<p>Using MonoTouch did allow me to 'look over the fence' at what life is like for iOS developers. One thing that immediately struck me was the performance of the UITableView. The WP7 Mango release improved scroll performance, but it is still pretty poor. In contrast the iOS <code>UITableView </code>is lightning fast, regardless of how much data you throw at it.</p>
+<p>The iOS APIs also make it much easier to create applications that conform the UI design guidelines. By using the <code>UINavigationController</code>, your applications will have a correctly styled back-button (and will also use the fancy transitions between pages as you navigate between them). The UITableView also has a very useable set of default cell styles.</p>
+<p>In conclusion, my feeling is that iOS development requires a bit more effort and the framework is not as 'rich' as the Windows Phone Silverlight framework. However, what it does have is speed and consistency. To my mind this is a pretty fair compromise.</p>
+<p>I think you'll see quite a bit more iOS development from me in future! </p>
+<p>You can download the code for both the Windows Phone and iOS applications: <a href='{{ site.baseurl }}/archive/2012/07/TwitterSearch.zip'>TwitterSearch.zip</a> </p>
+<p>Regards, Colin E.</p>

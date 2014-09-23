@@ -1,0 +1,254 @@
+---
+id: 2085
+author: ceberhardt
+title: "Everything you wanted to know about databinding in WPF, Silverlight and WP7 (Part Two)"
+oldlink: "/blog/colin/2012/04/everything-you-wanted-to-know-about-databinding-in-wpf-silverlight-and-wp7-part-two/"
+tags: 
+  - blog
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<h2>Introduction</h2>
+<p>This is the second post in my series about databinding in Silverlight and WPF. In <a href="http://www.scottlogic.co.uk/blog/colin/2012/04/everything-you-wanted-to-know-about-databinding-in-wpf-silverlight-and-wp7-part-one/">the first post</a> I looked at how you wire-up UI controls to a model in the absence of a databinding framework. I showed how databindings can be created in code-behind, removing the need for the various event handlers that the manual method requires, resulting in more readable code, where the connection between a UI control and a model property is all in one place. In this blog post I'll look at how bindings can be defined in XAML, providing a more concise and flexible method of wiring model objects to your view.</p>
+<p>The rough outline for this series is as follows:</p>
+<ul>
+<li><a href="http://www.scottlogic.co.uk/blog/colin/2012/04/everything-you-wanted-to-know-about-databinding-in-wpf-silverlight-and-wp7-part-one/">Part One</a> - Life before binding, <code>INotifyPropertyChanged </code>and creating bindings in code-behind
+<li>Part Two <strong>(this one)</strong> - The binding markup extensions, the <code>DataContext </code>and path syntax
+<li>Part Three - Other binding sources, <code>ElementName</code>, <code>TemplatedParent</code>, <code>TemplateBinding</code>
+<li>Part Four - Value converters
+<li>Part Five - List binding
+<li>...</ul>
+<h2>Code-behind binding: a re-cap</h2>
+<p>The previous blog post worked through the creation of a very simple application which creates a model object that represents an event (<code>INotifyPropertyChanged</code> implementation omitted for clarity)</p>
+{% highlight csharp %}
+/// <summary>
+/// A simple model object that represents an event
+/// </summary>
+public class EventModel : INotifyPropertyChanged
+{
+  /// <summary>
+  /// Gets / sets the event title
+  /// </summary>
+  public string Title { ...  }
+
+
+  /// <summary>
+  /// Gets / sets the date of this event
+  /// </summary>
+  public DateTime Date   { ...  }
+}
+{% endhighlight %}
+<p>And render it with the following UI:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/figOne.png" alt="" title="figOne" width="250" height="155" class="aligncenter size-full wp-image-2073" /></p>
+<p>The XAML for the UI is as follows:</p>
+{% highlight xml %}
+<Grid>
+  ...
+  <TextBlock Text="Name:"
+             Grid.Row="1" />
+  <TextBox x:Name="EventTitle"
+            Grid.Row="1" Grid.Column="1"/>
+
+  <TextBlock Text="Date:"
+             Grid.Row="2"/>
+  <sdk:DatePicker x:Name="EventDate"
+                  Grid.Row="2" Grid.Column="1"/>
+</Grid>
+{% endhighlight %}
+<p>The previous blog post wired up the above UI by creating bindings in code-behind:</p>
+{% highlight csharp %}
+public MainPage()
+{
+  InitializeComponent();
+
+  // create a model object
+  _event = new EventModel()
+  {
+    Date = new DateTime(2011, 7, 1),
+    Title = "Silverlight User Group"
+  };
+
+  // bind the Date to the UI
+  EventDate.SetBinding(DatePicker.SelectedDateProperty, new Binding("Date")
+  {
+    Source = _event,
+    Mode = BindingMode.TwoWay
+  });
+
+  // bind the Title to the UI
+  EventTitle.SetBinding(TextBox.TextProperty, new Binding("Title")
+  {
+    Source = _event,
+    Mode = BindingMode.TwoWay
+  });
+}
+{% endhighlight %}
+<p>Most applications create bindings within the XAML markup ... and that is exactly what we shall do next!</p>
+<h2>Binding Markup Extension</h2>
+<p>It is quite unusual to see code which creates bindings in C# (code behind), this is because there is a simpler, more elegant way. Firstly, we'll change the code above to remove all of the bindings, and instead set the <code>DataContext </code>of the page to the event that we wish to edit:</p>
+{% highlight csharp %}
+public MainPage()
+{
+  InitializeComponent();
+
+  // create a model object
+  _event = new EventModel()
+  {
+    Date = new DateTime(2011, 7, 1),
+    Title = "Silverlight User Group"
+  };
+
+  // bind the Date to the UI
+  this.DataContext = _event;
+}
+{% endhighlight %}
+<p>Next we'll update the XAML, removing the names of the controls used to edit this event (we only named them so that they were accessible form code-behind), and adding bindings as follows:</p>
+{% highlight xml %}
+<Grid x:Name="LayoutRoot" Background="White">
+  ...
+
+  <TextBlock Text="Name:"
+              Grid.Row="1"/>
+  <TextBox Text="{Binding Path=Title, Mode=TwoWay}"
+           Grid.Row="1" Grid.Column="1"/>
+
+  <TextBlock Text="Date:"
+              Grid.Row="2"/>
+  <sdk:DatePicker SelectedDate="{Binding Path=Date, Mode=TwoWay}"
+                  Grid.Row="2" Grid.Column="1"/>
+</Grid>
+{% endhighlight %}
+<p>Compiling and running this modified version of our code yields exactly the same result. The UI displays the initial values of the event, and the bindings take care of updating the UI if the model changes and updating the model based on user interactions with the controls. So let's take a closer look at how these binding work.</p>
+<p>Within XAML, any attribute value that is surrounded in curly braces <code>{...}</code> is a markup extension. Whilst most of your XAML markup is simply used to construct controls and panels in order to assemble the visual tree of your application, markup extension inject extra functionality into the XAML parser. The <a href="http://msdn.microsoft.com/en-us/library/ms750413.aspx">Binding Markup Extension</a> constructs a binding and associates it with the <code>UIElement</code> or <code>FrameworkElement </code>that the property belongs to.</p>
+<p>As you might recall from the previous blog post, all bindings have a source object, source property, target object and target property:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/binding.png" alt="" title="binding" width="600" height="111" class="aligncenter size-full wp-image-2075" /></p>
+<p>How do these map to our XAML binding? Let's look at the various components of our markup:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/BindingMarkup.png" alt="" title="BindingMarkup" width="500" height="183" class="aligncenter size-full wp-image-2086" /></p>
+<p>The <strong>target object</strong> is the object that owns the property which we are binding to, i.e. the UI control rendering our data. The <strong>target property</strong> is the property that has been set via the markup extension, and the <strong>source property</strong> is the path of the binding.</p>
+<p>However, there is something missing? Where is the <strong>source object</strong>? In our example above, where is the object that owns this <code>Title </code>property we are binding to the UI? If you recall earlier we set the <code>DataContext </code>property of our <code>MainPage</code> to the event class which is being edited ... <em>this </em>is our <strong>source object</strong>. The <code>DataContext </code>is a rather special property for a couple of reasons:</p>
+<ol><li><strong>Inheritence </strong>- The <code>DataContext </code>value is inherited down the visual tree from one control to the next. Even though we set the <code>DataContext </code>of <code>MainPage </code>to our model object, if you set a breakpoint in the code and inspect the <code>DataContext </code>of the above <code>TextBox </code>you will also find that it is set to the same event object.</li>
+<li><strong>Default source</strong> - Any bindings that are defined without the source object being specified (via the <code>Binding.Source</code> property), will take the <code>DataContext</code> of the target object as the source. In the case illustrated above this is the <code>DataContext</code> of the <code>TextBox</code>, which has been inherited from <code>MainPage</code>.</li>
+</ol>
+<p>These two properties of <code>DataContext </code>and the binding framework result in a concise and elegant way to wire up your applications user-interface.</p>
+<h2>The Property Path Syntax</h2>
+<p>We'll explore a few other features of the binding framework via a more complex example, this time we have a model object, <code>PersonModel</code>, that has a relationship to another model object, <code>AddressModel</code>. A summary of these classes is show below (<code>INotifyPropertyChanged </code>implementation omitted for clarity):</p>
+{% highlight csharp %}
+public class PersonModel : INotifyPropertyChanged
+{
+  public string Forename { ...  }
+
+  public string Surname { ...  }
+
+  public AddressModel WorkAddress { ...  }
+}
+
+public class AddressModel : INotifyPropertyChanged
+{
+  public string Street { ...  }
+ 
+  public string City { ...  }
+}
+{% endhighlight %}
+<p>Again, we create an instance of this class and set it as the <code>DataContext</code> of our user control:</p>
+{% highlight csharp %}
+_model = new PersonModel()
+{
+  Surname = "Eberhardt",
+  Forename = "Colin",
+  WorkAddress = new AddressModel()
+  {
+    Street = "6 Charlotte Square",
+    City = "Newcastle"
+  }
+};
+ 
+
+// bind the Date to the UI
+this.DataContext = _model;
+{% endhighlight %}
+<p>(Aren't <a href="http://msdn.microsoft.com/en-us/library/bb384062.aspx">C# object initializers</a> just great!)</p>
+<p>Binding the <code>Surname </code>and <code>Forename </code>to the UI is straightforward, but how about the <code>WorkAddress</code>? The <code>Path</code> property of a <code>Binding</code> supports a special <a href="http://msdn.microsoft.com/en-us/library/cc645024(VS.95).aspx">property path-syntax</a> which has a dot notation for navigating relationships. We can bind our UI to the various properties of the Address as follows:</p>
+{% highlight xml %}
+<TextBlock Text="Street:"  ... />
+<TextBox Text="{Binding Path=WorkAddress.Street, Mode=TwoWay}" ... />
+
+<TextBlock Text="City:" ... />
+<TextBox Text="{Binding Path=WorkAddress.City, Mode=TwoWay}" ... />
+{% endhighlight %}
+<p>Which yields the following UI:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/PersonUI.png" alt="" title="PersonUI" width="300" height="228" class="aligncenter size-full wp-image-2087" /></p>
+<p>Now because Address implements <code>INotifyPropertyChanged</code>, if we change the <code>Street</code> or <code>City </code>of the object bound to the UI, the binding framework will take care of pushing this change to the binding targets (i.e. the TextBox instances). But, what if we replace the <code>Address</code> instance entirely? For example ...</p>
+{% highlight csharp %}
+private void Button_Click(object sender, RoutedEventArgs e)
+{
+  _model.WorkAddress = new AddressModel()
+    {
+      Street = "62 Arcacia Ave.",
+      City = "Bananaville"
+    };
+}
+{% endhighlight %}
+<p>Again, the binding framework updates the UI. The binding framework not only detects changes in the source property, it is able to detect changes at any point in the chain of property relationships from the <code>DataContext</code>. That's pretty smart!</p>
+<p>The property-path syntax supports binding to arrays and dictionaries via indexers, for example:</p>
+<pre>
+{Binding Path=ArrayOfThings[0]}
+</pre>
+<p>and</p>
+<pre>
+{Binding Path=DictionaryOfStuff["foo"]}
+</pre>
+<p>I'm not going to give examples of all the various bindings that are possible, <a href="http://msdn.microsoft.com/en-us/library/cc645024(VS.95).aspx">MSDN has a good reference for these</a>.</p>
+<h2>Creating Binding 'Islands'</h2>
+<p>In the previous example we had two bindings that navigated the relationship from Person to <code>Address </code>to bind to properties of the <code>Address </code>object. Instead of repeatedly navigating the same relationship, we can bind a 'region' of our UI to the <code>WorkAddress</code> property.</p>
+<p>If you recall, the <code>DataContext </code>is inherited throughout the visual tree and is the default source for bindings. If we change the <code>DataContext </code>of a common root element of our various Address bindings to the <code>Person.WorkAddress</code>, we can simplify our bindings. We could set the <code>DataContext </code>in code-behind, but there is a more elegant way:</p>
+{% highlight xml %}
+<TextBlock Text="Forename:"  ... />
+<TextBox Text="{Binding Path=Forename, Mode=TwoWay}"  ... />
+
+<Border DataContext="{Binding WorkAddress}">
+  <Grid util:GridUtils.RowDefinitions=",," util:GridUtils.ColumnDefinitions=",">
+
+    <TextBlock Text="Street:"  ... />
+    <TextBox Text="{Binding Path=Street, Mode=TwoWay}"  ... />
+
+    <TextBlock Text="City:"  ... />
+    <TextBox Text="{Binding Path=City, Mode=TwoWay}"  ... />
+  </Grid>
+</Border>
+{% endhighlight %}
+<p>In the above XAML we are binding the <code>DataContext </code>of the <code>Border</code> element to the <code>WorkAddress </code>property of the Person instance (which was set as the <code>DataContext</code> of our UI in code-behind). As a result, all the children of the <code>Border</code> have the <code>Address </code>instance as their <code>DataContext</code>, so we can bind to the properties directly. This creates an 'island' within our UI that is bound to <code>Address </code>as shown graphically below:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/BindingIslands.png" alt="" title="BindingIslands" width="550" height="210" class="aligncenter size-full wp-image-2088" /></p>
+<h2>Binding Shorthand and Longhand</h2>
+<p>We'll wrap up part two of the series on databinding by looking at a couple of variations in the binding syntax, the first is a 'longhand' version of the binding. Instead of using the binding markup extension, it is possible to create the binding instance in XAML, for example, the simple binding to <code>Forename</code>:</p>
+{% highlight xml %}
+<TextBox Text="{Binding Path=Forename}"/>
+{% endhighlight %}
+<p>Can be expressed as follows:</p>
+{% highlight xml %}
+<TextBox>
+  <TextBox.Text>
+    <Binding Path="Forename"/>
+  </TextBox.Text>
+</TextBox>
+{% endhighlight %}
+<p>This yields exactly the same result. What's the point in the longhand version? Good question, I have only used it occasionally myself, typically within multi-bindings, or where validation rules are being added.</p>
+<p>If instead we want to make our bindings simpler, we can omit the Path and simply express the binding as follows:</p>
+{% highlight xml %}
+<TextBox Text="{Binding Forename}"/>
+{% endhighlight %}
+<p>Now there are some instances where you do not want to bind to a property of your source (i.e. <code>DataContext</code>), rather you want to bind to the source itself. The syntax for this is a single 'dot':</p>
+{% highlight xml %}
+<TextBox Text="{Binding Path=.}"/>
+{% endhighlight %}
+<p>Or, in this case, we can use the very-very short:</p>
+{% highlight xml %}
+<TextBox Text="{Binding}"/>
+{% endhighlight %}
+<p>We'll see some instances of when this might be useful in a future part of this blog series on binding when we look at collection-binding.</p>
+<h2>Summary</h2>
+<p>In this blog post we have looked at the binding markup extension and how this provides a concise mechanism for creating bindings. We have also seen how the <code>DataContext</code>, which is the default source for our bindings, plays a pivotal role in the Silverlight and WPF binding frameworks. Finally, we have seen how we can use bindings to 'switch' the <code>DataContext </code>in order to create binding 'islands' within out UI.</p>
+<p>In the next instalment we'll look at some of the other ways we can specify the binding source and when you might use them, but now we'll take a well-earned break ... see you next time.</p>
+<p>You can download the sourcecode for the examples described in this blogpost: <a href='{{ site.baseurl }}/archive/2012/04/DatabindingExamplesPartTwo.zip'>DatabindingExamplesPartTwo.zip</a></p>
+<p>Regards, Colin E.</p>

@@ -1,0 +1,217 @@
+---
+id: 2405
+author: ceberhardt
+title: "Enhanced Windows Phone 8 Map Gestures"
+oldlink: /blog/colin/2013/04/enhanced-windows-phone-8-map-gestures/
+image: "ceberhardt/assets/featured/map-gestures.jpg"
+categories: 
+- gestures
+- wp8
+- ceberhardt
+tags: 
+- codeproject
+- windowsphone
+- featured-windowsphone
+layout: default_post
+source: wordpress
+---
+<p><em>This blog post describes the addition of a two-finger rotation and three-finger pitch gesture to the Windows Phone 8 Map control.</em></p>
+<p>You can see these gesture in action below:</p>
+<p><iframe width="640" height="480" src="http://www.youtube.com/embed/XunJ9sTXfH0" frameborder="0" allowfullscreen></iframe></p>
+<p>The WP8 release replaced the image-tile based Bing maps with a fully vector-rendered map from Nokia. Being vector-based, this map can be panned, zoomed, rotated and rendered at an angle (i.e. pitched). However, much of this new functionality is not offered to the end user!</p>
+<p>The WP8 supports the same gestures that the Bing WP7 map did, i.e. a single-fingered pan gesture and two-fingered pinch to zoom. What about rotation and pitch? Why not allow the user to modify these via gestures?</p>
+<p>The key here is to add some new gestures that complement the existing one. I opted for the following:</p>
+<ul>
+<li><strong>Two-finger rotate</strong> - When the user places two fingers on the map this is currently used to zoom the display via a 'spreading' motion. However, if the user instead rotates the two touch points around the centre, the map should be rotated.</li>
+<li><strong>Three-finger pitch</strong> - When the user places three fingers on the map, if they drag up or down, the map should adjust its pitch accordingly.</li>
+</ul>
+<p>These gestures are enabled simply by creating them with a reference to the map:</p>
+{% highlight csharp %}
+new MapRotationGesture(map);
+new MapPitchGesture(map);
+{% endhighlight %}
+<p>If you don't care how this all works, just <a href="https://github.com/ColinEberhardt/WP8-MapGestures">head over to github</a> and grab the code. If you want to find out more, read on ...</p>
+<h2>Suppressing The Existing Gestures</h2>
+<p>In order to add these new gestures to the map, there needs to be a mechanism in place to suppress the existing gestures so that they do not interfere.</p>
+<p>The technique I used is similar to a technique I demonstrated previously for <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/suppressing-zoom-and-scroll-interactions-in-the-windows-phone-7-browser-control/" title="Suppressing Zoom and Scroll interactions in the Windows Phone 7 WebBrowser Control">suppressing pinch and scroll in the Windows Phone Browser control</a>. Both the Map and <code>WebBrowser </code>controls have a visual tree containing a number of user interface elements. The inner structure of the <code>Map</code> is shown below:</p>
+<pre>
+Microsoft.Phone.Maps.Controls.Map
+  System.Windows.Controls.Border
+    System.Windows.Controls.Border
+      Microsoft.Phone.Maps.Controls.MapPresentationContainer
+        MS.Internal.ExternalInputContainer
+          System.Windows.Controls.Grid
+            MS.Internal.TileHostV2
+            Microsoft.Phone.Maps.Controls.RootMapLayer
+</pre>
+<p>The technique for suppressing interactions is quite simple, just add a <code>ManipulationDelta</code> event handler to each one of these elements, setting the event to handled. The complete code is show below:</p>
+{% highlight csharp %}
+/// <summary>
+/// A base class for map gestures, which allows them to suppress the built-in map gestures.
+/// </summary>
+public class MapGestureBase
+{
+  /// <summary>
+  /// Gets or sets whether to suppress the existing gestures/
+  /// </summary>
+  public bool SuppressMapGestures { get; set; }
+
+  protected Map Map { get; private set; }
+
+  public MapGestureBase(Map map)
+  {
+    Map = map;
+    map.Loaded += (s,e) => CrawlTree(Map);
+  }
+
+  private void CrawlTree(FrameworkElement el)
+  {
+    el.ManipulationDelta += MapElement_ManipulationDelta;
+    for (int c = 0; c < VisualTreeHelper.GetChildrenCount(el); c++)
+    {
+      CrawlTree(VisualTreeHelper.GetChild(el, c) as FrameworkElement);
+    }
+  }
+
+  private void MapElement_ManipulationDelta(object sender, ManipulationDeltaEventArgs e)
+  {
+    if (SuppressMapGestures)
+      e.Handled = true;
+  }
+}
+{% endhighlight %}
+<p>If you create an instance of this class and associate it with a map you can turn gestures on and off via the <code>SuppressMapGestures </code>property:</p>
+{% highlight csharp %}
+var gestureBase = new MapGestureBase(map);
+gestureBase.SuppressMapGestures = true;
+{% endhighlight %}
+<p>NOTE: Unfortunately this doesn't solve the 'map in a pivot' or 'map in a panorama' problem that many Windows Phone developers have struggled with - the gestures that are handled are not propagated to a parent control.</p>
+<h2>A Rotation Gesture</h2>
+<p>The user can rotate the map by placing two fingers on the screen then rotating them around their central point. Because two fingers are also used for the pinch-to-zoom gesture, a suitable threshold needs to be introduced. I have found that disabling rotation until the user has rotated by 10 degrees feels about right.</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/RotationGesture.jpg" alt="RotationGesture" width="282" height="480" class="aligncenter size-full wp-image-2406" /></p>
+<p>The code that implements the rotation is really quite simple, the <code>MapGestureBase </code> subclass is shown in its entirety below:</p>
+{% highlight csharp %}
+/// <summary>
+/// Adds a two-finger rotation gesture to a Map control.
+/// </summary>
+public class MapRotationGesture : MapGestureBase
+{
+  /// <summary>
+  /// Gets or sets the minimuum rotation that the user must apply in order to initiate this gesture.
+  /// </summary>
+  public double MinimumRotation { get; set; }
+
+  private double? _previousAngle;
+
+  private bool _isRotating;
+    
+  public MapRotationGesture(Map map)
+    : base(map)
+  {
+    MinimumRotation = 10.0;
+    Touch.FrameReported += Touch_FrameReported;
+  }
+    
+
+  private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
+  {
+    var touchPoints = e.GetTouchPoints(Map);
+
+    if (touchPoints.Count == 2)
+    {
+      // for the initial touch, record the angle between the fingers
+      if (!_previousAngle.HasValue)
+      {
+        _previousAngle = AngleBetweenPoints(touchPoints[0], touchPoints[1]);
+      }
+        
+      // should we rotate?
+      if (!_isRotating)
+      {
+        double angle = AngleBetweenPoints(touchPoints[0], touchPoints[1]);
+        double delta = angle - _previousAngle.Value;
+        if (Math.Abs(delta) > MinimumRotation)
+        {
+          _isRotating = true;
+          SuppressMapGestures = true;
+        }
+      }
+
+      // rotate me
+      if (_isRotating)
+      {
+        double angle = AngleBetweenPoints(touchPoints[0], touchPoints[1]);
+        double delta = angle - _previousAngle.Value;
+        Map.Heading -= delta;
+        _previousAngle = angle;
+      }
+    }
+    else
+    {
+      _previousAngle = null;
+      _isRotating = false;
+      SuppressMapGestures = false;
+    }
+  }
+
+  private double AngleBetweenPoints(TouchPoint p1, TouchPoint p2)
+  {
+    return Math.Atan2(p1.Position.Y - p2.Position.Y, p1.Position.X - p2.Position.X)
+            *(180 / Math.PI);
+  }
+}
+{% endhighlight %}
+<p>Touch gestures are detected via the <code>Touch.FrameReported</code> event. When two fingers are placed on the screen the initial rotation angle is recorded. When the minimum rotation is exceeded, the <code>Map.Heading</code> is updated with each 'delta' reported. Really simple code, but a fantastic feature for the user!</p>
+<h2>A Pitch Gesture</h2>
+<p>You get a real feel for the vector-nature of the maps when you set the 'pitch', a style of rendering that is often used on satnavs.</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/PitchGesture.jpg" alt="PitchGesture" width="282" height="483" class="aligncenter size-full wp-image-2407" /></p>
+<p>I initially considered using a two finger pull-down gesture, which is similar to the one which Google Maps on Android uses, but found it very hard to coordinate the three gestures, zoom, rotate, pitch, which all use the same two-fingers! So instead, I opted for a three-finger pull-down gesture to increase the pitch of the map.</p>
+<p>The code follows a very similar pattern to the rotate gesture:</p>
+{% highlight csharp %}
+/// <summary>
+/// Adds a three-finger pitch gesture to a Map control.
+/// </summary>
+public class MapPitchGesture : MapGestureBase
+{
+  /// <summary>
+  /// Gets or sets the sensitivity of this gesture
+  /// </summary>
+  public double Sensitivity { get; set; }
+
+  private double? _initialPitchYLocation;
+
+  public MapPitchGesture(Map map)
+    : base(map)
+  {
+    Sensitivity = 0.5;
+    Touch.FrameReported += Touch_FrameReported;
+  }
+
+  private void Touch_FrameReported(object sender, TouchFrameEventArgs e)
+  {
+    var touchPoints = e.GetTouchPoints(Map);
+
+    SuppressMapGestures = touchPoints.Count == 3;
+
+    if (touchPoints.Count == 3)
+    {
+      if (!_initialPitchYLocation.HasValue)
+      {
+        _initialPitchYLocation = touchPoints[0].Position.Y;
+      }
+
+      double delta = touchPoints[0].Position.Y - _initialPitchYLocation.Value;
+      double newPitch = Math.Max(0, Math.Min(75, (Map.Pitch + delta * Sensitivity)));
+      Map.Pitch = newPitch;
+      _initialPitchYLocation = touchPoints[0].Position.Y;
+    }
+    else
+    {
+      _initialPitchYLocation = null;
+    }
+  }
+}
+{% endhighlight %}
+<p>As soon as three fingers are placed on the screen, the gesture becomes active. The movement of the first finger is used to determine the delta to apply to the <code>Pitch </code>property. Again, nice and simple!</p>
+<p>The sourcecode for these gesture, plus a demo app is <a href="https://github.com/ColinEberhardt/WP8-MapGestures">available via github</a>. Please let me know if you use this code in any of your apps.</p>
+<p>Regards, Colin E. </p>

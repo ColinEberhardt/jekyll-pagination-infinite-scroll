@@ -1,0 +1,4 @@
+
+siteurl: http://localhost:4000
+markdown: maruku
+pygments: false

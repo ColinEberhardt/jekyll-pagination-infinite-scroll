@@ -1,0 +1,244 @@
+---
+id: 2380
+author: ceberhardt
+title: "Comparing KendoUI and Knockout (with a bit of jQueryMobile on the side)"
+title-short: "KendoUI vs. KnockoutJS"
+oldlink: /blog/colin/2013/04/comparing-kendoui-and-knockout-with-a-bit-of-jquerymobile-on-the-side/
+image: "ceberhardt/assets/featured/kendo-vs-knockout.png"
+summary-short: "Comparing the KendoUI and Knockout MVVM frameworks"
+categories: 
+- ceberhardt
+tags: 
+- codeproject
+layout: default_post
+source: wordpress
+---
+<p>This blog post compares the same twitter search application written with both Knockout and Kendo in order to highlight the strengths and weaknesses of each framework.</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/knockout-vs-kendo.png" alt="knockout-vs-kendo" width="400" height="175" class="aligncenter size-full wp-image-2402" /></p>
+<h2>Introduction</h2>
+<p>I've always been a big fan of Knockout, most likely because it reminds me of Silverlight (rest in peace).</p>
+<blockquote><p>For my thoughts on how Silverlight and Knockout compare, head over to codeproject where I wrote <a href="http://www.codeproject.com/Articles/365120/KnockoutJS-vs-Silverlight">quite a lengthy article on the subject</a>.</p></blockquote>
+<p>More recently I have been dabbling with the use of Knockout for writing mobile applications. Because Knockout is an MVVM framework and doesn't have any UI components of its own, I used a combination of jQuery Mobile (jQM) and Knockout. I must admit, the integration of these two frameworks <a href="http://www.scottlogic.co.uk/blog/colin/2012/10/integrating-knockout-and-jquerymobile/">wasn't entirely painless</a>!.</p>
+<p>It is the integration pain I experienced with jQM and Knockout that has resulted in my interest in KendoUI. </p>
+<p>KendoUI (<a href="http://www.kendoui.com/">www.kendoui.com</a>) is a commercial JavaScript framework that includes web and mobile UI widgets together with an MVVM framework, which, on initial inspection, closely resembles Knockout. The promise of an MVVM framework and mobile widgets that play nicely together is quite appealing!</p>
+<p>In order to compare Kendo with Knockout + jQM I re-implemented the twitter-search application that <a href="http://www.scottlogic.co.uk/blog/colin/2012/10/integrating-knockout-and-jquerymobile/">I blogged about a few months ago</a>. The rest of this blog post is a collection of thoughts, commentary on the differences and personal opinions.</p>
+<p>The two version of the code are available on github:</p>
+<ul>
+<li><a href="https://github.com/ColinEberhardt/Knockout-jQueryMobile">https://github.com/ColinEberhardt/Knockout-jQueryMobile</a></li>
+<li><a href="https://github.com/ColinEberhardt/KendoUI-TwitterSearch">https://github.com/ColinEberhardt/KendoUI-TwitterSearch</a></li>
+</ul>
+<p>And you can see working examples at the following locations:</p>
+<ul>
+<li><a href="http://colineberhardt.github.io/Knockout-jQueryMobile/">Knockout + jQuery Mobile</a></li>
+<li><a href="http://colineberhardt.github.io/KendoUI-TwitterSearch/">KendoUI</a></li>
+</ul>
+<p>It is worth viewing the above on your phone.</p>
+<h2>From Knockout to KendoUI</h2>
+<ul>
+<li><a href="#magic_properties">Knockout has magic properties, Kendo has magic objects!</a></li>
+<li><a href="#construction">Knockout is more flexible regarding view model construction</a></li>
+<li><a href="#intellisense">Kendo requires a little effort to make it work with Intellisense</a></li>
+<li><a href="#hierarchies">Knockout supports view model hierarchies</a></li>
+<li><a href="#bindings">Kendo bindings are not JavaScript!</a></li>
+<li><a href="#data">Kendo lacks a $data binding</a></li>
+<li><a href="#widgets">Kendo has its own UI widgets</a>!</li>
+<li><a href="#dom">Kendo UI does not mangle the DOM</a></li>
+<li><a href="#styles">jQM has a more extensive set of styles</a></li>
+<li><a href="themes">Kendo supports multiple mobile themes</a></li>
+<li><a href="#datasource">Kendo has a datasource concept</a></li>
+<li><a href="#money">Knockout is open source, Kendo costs $$$</a></li>
+</ul>
+<h3><a id="magic_properties"></a>Knockout has magic properties, Kendo has magic objects!</h3>
+<p>JavaScript does not support the notion of change-notification when you change the value of an object's properties. This is a vital feature for supporting binding within an MVVM framework, so both Kendo and Knockout have to provide this missing change notification.</p>
+<p>With Knockout change notification is provided via observable properties:</p>
+{% highlight javascript %}
+var knockoutViewModel = {
+  name : ko.observable("john")
+};
+{% endhighlight %}
+<p>When a property has been created via <code>ko.observable</code> you can subscribe to change notifications for that property.</p>
+<p>With Kendo change notification is provided via observable objects:</p>
+{% highlight javascript %}
+var kendoViewModel = kendo.observable({
+  name : "john"
+});
+{% endhighlight %}
+<p>And as a result you can subscribe to change notifications on the object..</p>
+<p>Neither Kendo or Knockout are able to detect when a property is set directly, instead, you must set the property value via a function. With Knockout, your property is actually a function which you can set as follows:</p>
+{% highlight javascript %}
+knockoutViewModel.name("john smith"):
+{% endhighlight %}
+<p>Whereas with Kendo you set the property via the owning object:</p>
+{% highlight javascript %}
+kendoViewModel.set("name", "john smith");
+{% endhighlight %}
+<p>Both Kendo and Knockout support the concept of dependant properties, where you construct a property by composing one or more of the other objects properties, with change notifications happening automatically.</p>
+<p>Both Kendo's object-centic and Knockout's property-centric approaches seem quite reasonable, but as we shall see later this small difference has an impact on many aspects of each framework.</p>
+<h3><a id="construction"></a>Knockout is more flexible regarding view model construction</h3>
+<p>Because Knockout performs its 'magic' at the property level, it does not place any restrictions on the way in which you construct your view models. You can use the literal syntax:</p>
+{% highlight javascript %}
+var knockoutViewModel = {
+  name : ko.observable("john")
+};
+{% endhighlight %}
+<p>Or define a constructor:</p>
+{% highlight javascript %}
+function KnockoutViewModel() {
+  this.name = ko.observable("john");
+}
+
+var viewModel = new KnockoutViewModel();
+{% endhighlight %}
+<p>Personally I like the second approach because it gives you a view model 'factory', i.e. you can create multiple instances of the same view model, and it also allows you to define both public and private functions:</p>
+{% highlight javascript %}
+function KnockoutViewModel() {
+  this.name = ko.observable("john");
+
+  saveState = function() {
+    // do something here
+  }
+
+  this.update = function() {
+    saveState();
+  }
+}
+{% endhighlight %}
+<p>In the code above the <code>saveState </code>function is private - for more information on this pattern I'd recommend reading <a href="http://javascript.crockford.com/private.html">Private Members in JavaScript</a> by Douglas Crockford.</p>
+<p>All of the Kendo examples create view model using a literal syntax:</p>
+{% highlight javascript %}
+var kendoViewModel = kendo.observable({
+  name : "john"
+});
+{% endhighlight %}
+<p>Initially I was under the impression that it wasn't possible to create Kendo view models using constructor functions, furthermore, one of the nice guys from the Kendo support rather <a href="http://www.kendoui.com/forums/framework/mvvm/can-you-create-view-models-as-functions-.aspx">apologetically told me</a> "I am afraid that it is not possible to emulate Knockout style of view model creation via functions. Kendo MVVM supports only the literal style.".</p>
+<p>However, after a little bit of thought, I realised that it is possible if you explicitly return an observable as follows:</p>
+{% highlight javascript %}
+function KendoViewModel() {
+  this.name = "john";
+
+  return kendo.observable(this);
+}
+
+var viewModel = new KendoViewModel ();
+{% endhighlight %}
+<p>However, things are not quite so straightforward - if you need to capture the reference to 'this' you must ensure that the reference is to the observable object, as follows:</p>
+{% highlight javascript %}
+function KendoViewModel() {
+  this.name = "john";
+
+  function saveState = function() { 
+    console.log(that);
+  }
+
+  this.update = function() {
+    saveState();
+  }
+
+  var that = kendo.observable(this);
+  return that;
+}
+
+var viewModel = new KendoViewModel ();
+{% endhighlight %}
+<p>In the above code the variable, <code>that</code>, is always going to refer to the observable object regardless of what, <code>this</code>, refers to.</p>
+<h3><a id="intellisense"></a>Kendo requires a little effort to make it work with Intellisense</h3>
+<p>Following on from the previous point, because the Kendo 'magic' is at the object level, Visual Studio Intellisense becomes flummoxed. Now I know that Visual Studio is perhaps not the best tool for JavaScript, but I can bet that quite a few Knockout and Kendo developers use it!</p>
+<p>Visual Studio uses pseudo-execution of your JavaScript code to provide Intellisense. With Knockout this works well out-of-the-box - see the image below where the update function, together with its 'summary' text, are picked up by Intellisense:</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/ko_intellisense.png" alt="ko_intellisense" width="424" height="407" class="aligncenter size-full wp-image-2382" /></p>
+<p>Whereas with Kendo, in order for Visual Studio to be able to execute your code it needs to be aware of the Kendo and jQuery JavaScript files. This can be done by adding a 'reference' comment, as shown below:</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/kendo_intellisense.png" alt="kendo_intellisense" width="475" height="448" class="aligncenter size-full wp-image-2383" /></p>
+<p>Note that you can also see the other functions that are present on observable objects.</p>
+<h3><a id="hierarchies"></a>Knockout supports view model hierarchies</h3>
+<p>One particularly elegant feature of Knockout is that it supports view model hierarchies. When binding collections of objects, Knockout creates a child binding context that refers to the nested view model data. You can also explicitly set the binding-context of an element via the 'with' binding. This approach allows you to create complex nested view models.</p>
+<p>With Kendo, when binding a collection of objects the 'context' for each item is the parent view model, which means that any event bindings are sent to the owning view model. This is clearly due to the way that Kendo uses observable objects rather than observable properties.</p>
+<p>Whilst this is not a significant limitation, I do miss the binding-context concept when working with Kendo. The lack of this feature does mean that view models can become bloated.</p>
+<h3><a id="bindings"></a>Kendo bindings are not JavaScript!</h3>
+<p>With Knockout, bindings are JavaScript, which means you can have bindings which contain logic. For example:</p>
+<pre>
+data-bind="enable: searchTerm().length > 0 && isSearching() == false,
+           click: search"
+</pre>
+<p>Kendo bindings are not JavaScript!</p>
+<p>A simple way to achieve equivalent functionality is to move the JavaScript in the binding into a dependant property:</p>
+{% highlight javascript %}
+searchButtonDisabled: function () {
+  return this.get("searchTerm").length === 0 && this.get("isSearching") === false;
+}
+{% endhighlight %}
+<p>Which is bound as follows:</p>
+<pre>
+data-bind="click: executeSearch, { disabled: searchButtonDisabled }"
+</pre>
+<p>I do not see this as a significant limitation of Kendo. I do use this feature quite often with Knockout, it feels a little like the Silverlight / WPF concept of value-converters. However, I can see how it could be abused, hiding JavaScript logic within bindings isn't terribly good for testing or maintenance!</p>
+<h3><a id="data"></a>Kendo lacks a $data binding</h3>
+<p>With Knockout, if you create a 'foreach' binding to an array of strings, the template that renders each string can make use of the <code>$data</code> binding:</p>
+{% highlight xml %}
+<span data-bind="text: $data"></span>
+{% endhighlight %}
+<p>The above is needed because the binding-context of the above span element is a string - we want to bind to the object itself rather than a property of the object.</p>
+<p>I could not find an equivalent feature with Kendo, so had to create an object as a container for the string:</p>
+{% highlight javascript %}
+this.recentSearches.unshift({ searchString: this.searchTerm });
+{% endhighlight %}
+<p>And bind it as follows:</p>
+{% highlight xml %}
+<span data-bind="text:searchString"></span>
+{% endhighlight %}
+<p>Again, a pretty minor limitation.</p>
+<h3><a id="widgets"></a>Kendo has its own UI widgets!</h3>
+<p>So far much of my discussion has focussed on Knockout features which Kendo does not support. However, Kendo is much more than just an MVVM framework, it includes a large number of web and mobile UI widgets.</p>
+<p>In the context of this comparison, I integrated jQM with Knockout to create my mobile UI - and as I mentioned earlier, <a href="http://www.scottlogic.co.uk/blog/colin/2012/10/integrating-knockout-and-jquerymobile/">this integration was pretty painful</a>. In contrast, the Kendo UI Mobile framework integrates seamlessly with the Kendo MVVM framework - as you might expected!</p>
+<h3><a id="dom"></a>Kendo UI does not mangle the DOM</h3>
+<p>While we are on the subject of the UI, one of the features of jQM that I really disliked is the way that it totally mangles the DOM.</p>
+<p>In order to support the jQM styling it requires a large number of 'supporting' elements. As an example a button is transformed from this:</p>
+{% highlight xml %}
+<button type="submit" data-bind="enable: isSearchEnabled,
+                                 click: executeSearch">Go</button>
+{% endhighlight %}
+<p>To this:</p>
+{% highlight xml %}
+<div class="ui-btn ui-btn-inline ui-btn-corner-all ui-shadow ui-btn-up-c">
+  <span class="ui-btn-inner ui-btn-corner-all">
+    <span class="ui-btn-text">Go</span>
+  </span>
+  <input class="ui-btn-hidden" type="button" value="Go"
+                  data-bind="enable: isSearchEnabled, 
+                                    click: executeSearch"/>
+</div>
+{% endhighlight %}
+<p>This causes all kinds of headaches when trying to use jQM with an MVVM or MVC framework. </p>
+<p>In contrast, with Kendo when you create a button:</p>
+{% highlight xml %}
+<a data-role="button" 
+   data-bind="click: executeSearch, { disabled: searchButtonDisabled }">Go</a>
+{% endhighlight %}
+<p>It adds very little supporting structure:</p>
+{% highlight xml %}
+<a data-role="button" class=" km-button"
+      data-bind="click: executeSearch, { disabled: searchButtonDisabled }">
+      <span class="km-text">Go</span>
+</a>
+{% endhighlight %}
+<p>And in many cases it leaves the DOM structure unaltered. </p>
+<h3><a id="styles"></a>jQM has a more extensive set of styles</h3>
+<p>The jQuery Mobile framework is more extensive than Kendo. As a quick example, jQM nicely styles your list items:</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/jqm_list.png" alt="jqm_list" width="425" height="276" class="aligncenter size-full wp-image-2385" /></p>
+<p>With Kendo, you have to put in a bit of extra effort to style the list:</p>
+<p><img src="{{ site.baseurl }}/archive/2013/04/kendo_list.png" alt="kendo_list" width="422" height="447" class="aligncenter size-full wp-image-2384" /></p>
+<p>This is just one example of many - jQM is a <em>big</em> framework.</p>
+<h3><a id="themes"></a>Kendo supports multiple mobile themes</h3>
+<p>The jQM UI is designed to look at home on iOS devices, which is just fine for the ~30% of people who own an iPhone. However, this UI just looks plain wrong on an Android or Windows Phone. </p>
+<p>There are a few open source Android themes for jQM, but I didn't get a satisfactory result with any of them. Also, Microsoft have <a href="http://www.scottlogic.co.uk/blog/colin/2012/04/introducing-the-jquery-mobile-metro-theme/">contributed a Metro theme to jQM, but it is rather ugly</a>!</p>
+<p>In contrast, Kendo supports iOS, Android, BlackBerry and Windows Phone, <a href="http://demos.kendoui.com/mobile/overview/index.html#/">as shown on their online demo</a>. This is pretty neat!</p>
+<h3><a id="datasource"></a>Kendo has a datasource concept</h3>
+<p>With the Knockout + jQM application I wrote a very simple <code>TwitterSearchService</code> which acts as a datasource. The Kendo framework has a <a href="http://docs.kendoui.com/getting-started/framework/datasource/overview"><code>DataSource</code> component</a> which makes integrating with services such as Twitter much easier, you typically provide configuration to the <code>DataSource </code>and it does the rest. Also, the UI components like the <code>ListView </code>integrate directly with the <code>DataSource</code>, with features like pull-to-load-more available out-of-the-box.</p>
+<h3><a id="money"></a>Knockout is open source, Kendo costs $$$</h3>
+<p>This one is pretty obvious really ...</p>
+<p>Knockout is open source, and as a result doesn't cost you anything to use it. For an open source project it is very well documented and there are many blog posts that provide tutorials and solutions to problems. The <a href="http://learn.knockoutjs.com/">interactive tutorial</a> is a particularly fantastic idea.</p>
+<p>Kendo will cost you a few hundred dollars to buy (http://www.kendoui.com/purchase.aspx). Considering that Kendo is a UI widget framework, MVVM framework and mobile framework, I would say that the price is very reasonable. Also, the documentation is of a similar quantity and quality to that of Knockout.</p>
+<h2>Conclusions</h2>
+<p>This article has been a mixed-bag of observations, thoughts and opinions and it is not intended to be an exhaustive comparison. Despite that, I hope it will be useful for others.</p>
+<p>I certainly prefer the Knockout implementation of MVVM, I find it more powerful and flexible than the Kendo equivalent. However, Kendo's MVVM framework is certainly adequate.</p>
+<p>When it comes to building mobile applications, the fully integrated Kendo solution has some pretty big advantages over Knockout and jQuery Mobile.</p>
+<p>Regards, Colin E.</p>
+

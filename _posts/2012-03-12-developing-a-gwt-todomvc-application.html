@@ -1,0 +1,213 @@
+---
+id: 2042
+author: ceberhardt
+title: Developing a GWT TodoMVC application
+oldlink: "/blog/colin/2012/03/developing-a-gwt-todomvc-application/"
+tags: 
+  - GWT
+  - blog
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p><i>This blog post describes my experiences of developing a simple Todo application with Google Web Toolkit (GWT), that I have contributed to the JavaScript TodoMVC project, which compares the implementation of the same application with various JavaScript frameworks. This blog discusses why I chose GWT, the compromises and benefits of this approach.</i></p>
+<p>When I started writing this blog a few years ago I mostly focused on WPF and Silverlight technologies. More recently I have found the need to diversify and have invested a lot of time and energy into learning JavaScript, readying myself for the HTML5 revolution that seems to be happening around us! (even though <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/the-untimely-demise-of-the-plugin-and-how-lob-developments-will-suffer/" title="The Untimely Demise of the Plugin (and how LOB developments will suffer)">I think the revolution is happening a bit to quickly</a>).</p>
+<p>One obstacle developers often face when starting to learn JavaScript is the vast number of mature JavaScript frameworks that can be found on the internet. When selecting a JavaScript framework for DOM manipulation and animation, jQuery has now become the de-facto standard. Whereas, when it comes to selecting a framework for structuring your application logic and implementing suitable UI design patterns, there are numerous seemingly viable alternatives, and it is very hard to know which to choose.</p>
+<p>To assist in framework selection, <a href="http://www.addyosmani.com/">Addy Osmani</a> created the <a href="http://addyosmani.github.com/todomvc/">TodoMVC project</a> which implements the same, simple Todo-list application with a wide range of JavaScript frameworks (18 to date!). </p>
+<p><a href="{{ site.baseurl }}/archive/2012/03/screenshot.png"><img src="{{ site.baseurl }}/archive/2012/03/screenshot.png" alt="" title="screenshot" width="528" height="330" class="aligncenter size-full wp-image-2043" /></a></p>
+<p>This project has been described as JavaScript framework 'speed dating', in that it allows an easy comparison of a diverse range of frameworks within a relatively short period of time. Whilst the simple Todo application doesn't have the depth required to fully explore each framework in detail, nor does it help answer other important questions regarding support, documentation and licensing, what it does do very well (and very quickly) is give you a 'feel' for each framework.</p>
+<p>Recently myself and Scott Logic's very own JavaScript guru, <a href="http://www.scottlogic.co.uk/blog/chris/">Chris Price</a>, gave a brief presentation to a new client on JavaScript framework selection. We were both aware of the TodoMVC project, but the frameworks we wanted to demonstrate, Google Closure and Google Web Toolkit (GWT), were lacking examples. This is something we set about fixing. Chris completed his <a href="http://www.scottlogic.co.uk/2012/02/a-todomvc-closure-example/">TodoMVC Closure port</a> a couple of weeks ago, and I have just finished the GWT version, which you can <a href="http://colineberhardt.github.com/todomvc/">see online at github</a> (the GWT version <a href="https://github.com/addyosmani/todomvc/pull/103">has been reviewed in detail</a> and will be included in the next release).</p>
+<p>The rest of this blog post describes the GWT implementation.</p>
+<h2>Why GWT?</h2>
+<p>When compared with the other JavaScript frameworks in the TodoMVC project, GWT is different ... very different. With GWT you write your application in Java, which is compiled into JavaScript by the GWT compiler. The reason I am interested in GWT is that (in my opinion) JavaScript has some pretty big limitations that hamper its use when creating large-scale enterprise applications, a topic <a href="http://www.scottlogic.co.uk/blog/colin/2011/08/can-microsoft-%E2%80%98fix%E2%80%99-javascript-and-make-html5-applications-viable/">I have touched on a few times before</a>. This is not to say I dislike JavaScript, quite the contrary, it is just that there are some problems that strongly typed languages are better at solving.</p>
+<p>GWT is quite an extensive framework, whilst it is not on a par with the likes of WinForms or WPF in terms of controls, libraries and framework features, you do get a lot of 'stuff' for free. But what I really like about GWT is not so much the high-level abstraction that it provides, yes ... you can use GWT without knowing the first thing about the DOM or web browsers, but the fact that it does not prohibit you from working with the DOM in the same way that you would with any other JavaScript framework. If you strip away all the widgets, event bus, ui-binder and the rest, you are left with nothing more than a trimmed-down Java SE library and the DOM.</p>
+<h2>The GWT Todo application</h2>
+<p>My implementation of the TodoMVC application uses the Model View Presenter (MVP) pattern, as described in the <a href="http://code.google.com/webtoolkit/articles/mvp-architecture.html">'Large scale app development</a>' papers published by Google. This pattern is quite effective for GWT development; in that it promotes a Humble View (as <a href="http://martinfowler.com/eaaDev/uiArchs.html">described by Martin Fowler</a>), which makes testing your GWT application much faster (i.e. no compilation to JavaScript is required to unit test)</p>
+<p>My implementation of the Todo application is nothing notable, just MVP-by-numbers as illustrated by the UML class diagram below:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/03/TodoMVC.png" alt="" title="TodoMVC" width="630" height="580" class="aligncenter size-full wp-image-2050" /></p>
+<p>Very briefly ... the <code>ToDoPresenter </code>manages a collection of <code>ToDoItem </code>instances, this includes create, update, delete and persistence. The presenter exposes two interfaces, <em>ToDoPresenter.View</em>, which is the interface that a view is expected to implement, and <em>ToDoPresenter.ViewEventHandler</em>, which is an interface that handles view 'events'. Each <code>ToDoItem </code>instance has a reference back to the presenter so that it can remove itself and notify the presenter of state changes (yes, I wish Java had events and <code>INotifyPropertyChanged</code>).</p>
+<p>The view is implemented declaratively via the GWT UiBinder. The markup for the view is shown below:</p>
+{% highlight xml %}
+<!DOCTYPE ui:UiBinder SYSTEM "http://dl.google.com/gwt/DTD/xhtml.ent">
+<ui:UiBinder xmlns:ui="urn:ui:com.google.gwt.uibinder"
+  xmlns:g="urn:import:com.google.gwt.user.client.ui"
+  xmlns:cv="urn:import:com.google.gwt.user.cellview.client"
+  xmlns:todo="urn:import:com.todo.client">
+  <g:HTMLPanel>
+    <div id="todoapp">
+      <header>
+        <h1>Todos</h1>
+        <todo:TextBoxWithPlaceholder
+          placeholder="What needs to be done?" ui:field="taskText">
+        </todo:TextBoxWithPlaceholder>
+      </header>
+
+      <section ui:field="mainSection">
+        <g:CheckBox ui:field="toggleAllCheckBox">Mark all as complete</g:CheckBox>
+        <div id="todo-list">
+          <cv:CellList ui:field="todoTable"></cv:CellList>
+        </div>
+      </section>
+
+      <footer ui:field="todoStatsContainer">
+        <g:Anchor href="#" ui:field="clearCompleted">
+          Clear
+          <span class="number-done" ui:field="clearTasksCount"></span>
+          completed
+          <span class="word-done" ui:field="clearTasksLabel"></span>
+        </g:Anchor>
+        <div id="todo-count">
+          <span class="number" ui:field="remainingTasksCount"></span>
+          <span class="word" ui:field="remainingTasksLabel"></span>
+          left.
+        </div>
+      </footer>
+    </div>
+
+    <div id="instructions">
+      Double-click to edit a todo.
+    </div>
+
+    <div id="credits">
+      Created by
+      <br />
+      <a href="http://jgn.me/">J&eacute;r&ocirc;me Gravel-Niquet</a>
+      <br />
+      Modified to use
+      <a href="http://code.google.com/webtoolkit/">Google Web Toolkit</a>
+      by
+      <a href="http://www.scottlogic.co.uk/blog/colin/">Colin Eberhardt</a>
+    </div>
+  </g:HTMLPanel>
+</ui:UiBinder> 
+{% endhighlight %}
+<p>This closely mirrors the standard <a href="https://github.com/addyosmani/todomvc/blob/master/template/index.html">TodoMVC template</a>.</p>
+<h2>Todo Item Rendering</h2>
+<p>The most interesting part of the application is the way that the list of Todo items is rendered. GWT has a number of framework features that support the management of lists of data, and for this application I opted to use a <a href="http://code.google.com/webtoolkit/doc/latest/DevGuideUiCellWidgets.html">Cell Widget</a>, which is a common set of interfaces that expose and render list like data, automatically updating the UI as data is added / removed.</p>
+<p>In the TodoMVC application the data is presented as an <code>AbstractDataProvider</code> which is coupled to a <code>CellList</code> view component. Unfortunately, this is where I started to hit a few problems. The TodoMVC project supplies a <a href="https://github.com/addyosmani/todomvc/blob/master/template/index.html">standard template</a> that all implementations should follow. Within the template the list of Todo items are rendered as an unordered list (<code>ul</code> / <code>li</code>). However, the GWT <code>CellList</code> uses a <code>div</code> as the root container for list items. Furthermore, each rendered list item is also wrapped in a <code>div</code>. There is no obvious way to change this functionality without re-creating the entire <code>CellList</code> widget and unfortunately the target HTML output could not be achieved. As a result of this, I had to <a href="https://github.com/ColinEberhardt/todomvc/blob/master/architecture-examples/gwt/css/override.css">modify quite a bit of the application styling</a> to target the different structure.</p>
+<p>The GWT Cell Widgets have a number of standard cell types, including checkbox cells, text input cells etc ... however, this application required quite a specialised cell, including both a checkbox and a text field, plus an edit mode which replaces the contents with an input field. To support this I implemented a <code>ToDoCell</code>, which is a cell specifically designed for rendering <code>ToDoItem</code> instances.</p>
+<p>This cell contains two different templates, one for edit mode, the other for read-only mode:</p>
+{% highlight java %}
+/**
+ * The HTML templates used to render the cell.
+ */
+interface Templates extends SafeHtmlTemplates {    
+
+  /**
+   * The view-mode template
+   */
+  @SafeHtmlTemplates.Template(
+      "<div class='{2}' data-timestamp='{3}'>" +
+            "{0} " +
+            "<label>{1}</label>" +
+            "<a class='destroy'></a>" +
+      "</div>")
+  SafeHtml view(SafeHtml checked, SafeHtml task, String done, String timestamp);
+   
+  /**
+   * The edit-mode template
+   */
+  @SafeHtmlTemplates.Template("<div class='listItem editing'><input class='edit' value='{0}' type='text'></div>")
+  SafeHtml edit(String task);
+}
+{% endhighlight %}
+<p>With the render method picking one or the other template based on whether the current cell is being edited:</p>
+{% highlight java %}
+@Override  
+public void render(Context context, ToDoItem value, SafeHtmlBuilder sb) {
+  // render the cell in edit or view mode
+  if (isEditing(value)) {
+    SafeHtml rendered = templates.edit(value.getTitle());
+    sb.append(rendered);
+  } else {
+    SafeHtml rendered = templates.view(
+            SafeHtmlUtils.fromString(value.getTitle()),
+            value.isDone() ? "listItem view done" : "listItem view"
+    sb.append(rendered);
+  }
+}
+{% endhighlight %}
+<p>NOTE: The cell widget framework only creates a single instance of each cell, one for each column (for table widgets). Hence the row context information, in this case the <code>ToDoItem</code>, is passed in to all methods that require the row state.</p>
+<p>The bulk of the code within this cell implementation sits within the <code>onBrowserEvent</code> method. DOM events are passed to this method, together with the cell's parent element and item being rendered. This allows you to handle keyboard, mouse and other interactions, swapping between edit and view mode etc ...</p>
+<p>Within this method we manage the edit process, with <code>commitEdit</code> and <code>endEdit</code> switching between the two different cell templates:</p>
+{% highlight java %}
+@Override
+public void onBrowserEvent(Context context, Element parent, ToDoItem value, NativeEvent event,
+    ValueUpdater<ToDoItem> valueUpdater) {
+
+  String type = event.getType();
+
+  if (isEditing(value)) {
+
+    // handle keyup events
+  if ("keyup".equals(type)) {
+    int keyCode = event.getKeyCode();
+
+    // handle enter key to commit the edit
+    if (keyCode == KeyCodes.KEY_ENTER) {          
+      commitEdit(parent, value);
+      endEdit(context, parent, value);
+    }
+
+    // handle escape key to cancel the edit
+    if (keyCode == KeyCodes.KEY_ESCAPE) {
+      endEdit(context, parent, value);
+    }
+  }
+
+  // handle blur event
+  if ("blur".equals(type) && !beginningEdit) {
+    commitEdit(parent, value);
+    endEdit(context, parent, value);
+  }
+
+} else {
+	
+	// handle double clicks to enter edit more
+	if ("dblclick".equals(type)) { 
+    beginEdit(context, parent, value);
+
+    beginningEdit = true;
+    InputElement input = getInputElement(parent);
+    input.focus();
+    input.select();
+    beginningEdit = false;
+	}
+
+  // when not in edit mode - handle click events on the cell
+  if ("click".equals(type)) {
+
+    EventTarget eventTarget = event.getEventTarget();
+    Element clickedElement = Element.as(eventTarget);
+    String tagName = clickedElement.getTagName();
+
+    // check whether the checkbox was clicked        
+    if (tagName.equals("INPUT")) {
+
+      // if so, synchronise the model state
+      InputElement input = clickedElement.cast();
+      value.setDone(input.isChecked());
+      
+      // update the 'row' style
+      if (input.isChecked()) {
+        getViewRootElement(parent).addClassName("done");
+      } else {
+        getViewRootElement(parent).removeClassName("done");  
+      }
+
+    } else if (tagName.equals("A")) {          
+      // if the delete anchor was clicked - delete the item
+      value.delete();          
+    } 
+  }
+}
+{% endhighlight %}
+<p>As a result, even though the markup differs slightly from the template, the desired functionality is the same.</p>
+<h2>Conclusions</h2>
+<p>I think the GWT implementation of the TodoMVC application stands up very well in comparison to the other frameworks presented there. Although, compromises in the output markup did have to be made. I think this is a reflection of the different approach that a typical GWT application development would take, where the application is designed at a higher level, in terms of panels and widgets, rather than at the markup / detail level.</p>
+<p>Despite this, the GWT developer does have full access to the DOM, and as a result, I was able to precisely match the functionality required with little effort, even though the GWT framework itself does not support such a specialised cell type as the one required.</p>
+<p>It is worth noting that one of the greatest strengths of GWT is <em>not</em> that it means you don't have to understand JavaScript. Rather, it is that you are developing using a strongly-typed language. As a result, when one of the TodoMVC project reviewers <a href="https://github.com/addyosmani/todomvc/pull/103#discussion-diff-477540">asked for name changes</a>, and other refactoring tasks, I was able to make these changes with complete confidence via the Eclipse refactoring tools.</p>
+<p>Hopefully other people will find this to be a useful addition to TodoMVC project!</p>
+<p>Finally, thanks to <a href="https://github.com/sindresorhus">Sindre Sorhus</a> and <a href="http://www.scottlogic.co.uk/blog/chris/">Chris Price</a> for providing detailed review comments on my GWT implementation.</p>
+<p>Regards, Colin E.</p>

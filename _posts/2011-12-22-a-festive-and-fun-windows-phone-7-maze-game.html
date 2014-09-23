@@ -1,0 +1,194 @@
+---
+id: 1899
+author: ceberhardt
+title: A Festive and Fun Windows Phone 7 Maze Game
+oldlink: "/blog/colin/2011/12/a-festive-and-fun-windows-phone-7-maze-game/"
+tags: 
+  - Windows Phone 7
+  - blog
+  - windowsphone
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>Last night, with my Christmas presents all wrapped and a lack of any decent programmes (festive or otherwise) on television, I had a few hours to kill, so decided to create a festive-themed WP7 game ...</p>
+<p>Ever since I first started writing code for Windows Phone 7 I have wanted to do something involving physics and the accelerometer. I finally found a few hours to spare to give it a go. This blog post doesn't go into too much detail about <a href="http://farseerphysics.codeplex.com/">Farseer</a>, the Physics Engine that I used, I didn't really have time to learn it in any great detail. This post is more about how quickly you can put together something really quite cool in quite a short space of time using libraries and code grabbed from the internet.</p>
+<p>The simple app I created renders a maze that you 'roll' a small ball around by tilting your phone:</p>
+<p><img src="{{ site.baseurl }}/archive/2011/12/MazeGame.png" alt="" title="MazeGame" width="200" height="363" class="aligncenter size-full wp-image-1900" /></p>
+<p>This works well in the new 7.1 emulator where you can tilt the emulator via the extended controls. However, it works best on a real device, where you can control tilt far more easily. See the video below:</p>
+<p><iframe width="480" height="360" src="http://www.youtube.com/embed/Xkhh9P-Y45k" frameborder="0" allowfullscreen></iframe></p>
+<h2>Farseer Physics Engine</h2>
+<p>The game makes use of the popular <a href="http://farseerphysics.codeplex.com/">Farseer Physics Engine</a>. This library allows you to create a world populated with physics bodies, supporting features such as friction, joints, motors and much much more. As I am a Silverlight developer I made use of the <a href="http://physicshelper.codeplex.com/">Physics Helper</a> library which allows you to use the Farseer engine within a Silvelight application with very little effort. With the Physics Helper you simply make the Physics Engine 'aware' of the objects you wish it to control and it does the rest, animating them as they are subjected to gravity and other interactions.</p>
+<p>The simplest way to use Physics Helper is via behaviours, this allows you to create a fully functioning 'world' without writing a single line of C# code. For example, you can create a ball and a surface that it will fall towards, eventually coming to rest, with just a few lines of XAML:</p>
+{% highlight csharp %}
+<Canvas x:Name="canvas">
+  <!-- create our 'world' -->
+  <i:Interaction.Behaviors>
+    <pb:PhysicsControllerBehavior/>
+  </i:Interaction.Behaviors>
+        
+  <Ellipse Width="100" Height="100" Fill="Red"
+            Canvas.Left="80" Canvas.Top="100">
+    <!-- make the engine aware of this element -->
+    <i:Interaction.Behaviors>
+      <pb:PhysicsObjectBehavior />
+    </i:Interaction.Behaviors>
+  </Ellipse>
+
+
+  <Rectangle Width="500" Height="10" Fill="Blue"
+              Canvas.Top="500">
+    <!-- make the engine aware of this STATIC element -->
+    <i:Interaction.Behaviors>
+      <pb:PhysicsObjectBehavior IsStatic="True"/>
+    </i:Interaction.Behaviors>
+  </Rectangle>
+</Canvas>
+{% endhighlight %}
+<p><img src="{{ site.baseurl }}/archive/2011/12/SimpleExample.png" alt="" title="SimpleExample" width="600" height="256" class="aligncenter size-full wp-image-1901" /></p>
+<p>I find this pretty amazing! </p>
+<p>Physics Helper will do much more, it can handle complex paths and geometries, explosions and collisions with minimal effort. For a greater insight into just how much is possible, I would recommend <a href="http://channel9.msdn.com/coding4fun/articles/Creating-a-Pinball-Game-in-Silverlight-Using-the-Physics-Helper-Library--Farseer-Physics">Andy Beaulieu's Channel 9 article</a>. Andy is the creator of Farseer, so really knows his stuff!</p>
+<p>My maze is generated in C# code, so despite the elegance of using Physics Helper via behaviours, I need to add elements to my canvas programmatically. This means that I have to make the physics engine aware of their existence in code also. To achieve this, I add the behaviour in code as follows:</p>
+{% highlight csharp %}
+/// <summary>
+/// Uses Physics Helper to create a physics body for the given element
+/// </summary>
+private void AddPhysicsBody(FrameworkElement element, bool isStatic)
+{
+  var behaviorCollection = Interaction.GetBehaviors(element);
+  behaviorCollection.Add(new PhysicsObjectBehavior()
+  {
+    IsStatic = isStatic
+  });
+
+  var physicsObject = element.GetValue(PhysicsObjectMain.PhysicsObjectProperty) as PhysicsObjectMain;
+  _physicsController.AddPhysicsBody(physicsObject);
+}
+{% endhighlight %}
+<h2>Creating a Maze</h2>
+<p>I found numerous C# maze algorithms on the internet, most of them based on the same random-walk concept. There is a great description of this approach, with <a href="http://weblog.jamisbuck.org/2011/1/20/maze-generation-wilson-s-algorithm">animated examples on this blog</a>. Unfortunately every C# implementation I came across was tightly coupled to a specific UI framework, often WinForms or XNA (tut-tut remember to separate your concerns!). So, I took a simple maze algorithm <a href="http://www.techpowerup.com/forums/showthread.php?t=109739">from a software forum</a> and ripped-out the WinForms / GDI rendering code. A new maze is constructed simply by creating an instance of the <code>Maze</code> class, passing it the number of rows and columns.</p>
+<p>In order to render the maze using Silverlight elements, I simply took the original maze graphics code:</p>
+{% highlight csharp %}
+private void CreateMaze()
+{
+  // compute the number of rows / cols
+  double ratio = mazeContainer.ActualHeight / mazeContainer.ActualWidth;
+  int cols = _mazeSize;
+  int rows = (int)((double)cols * ratio);
+  double cellWidth = mazeContainer.ActualWidth / cols;
+
+  // create the maze
+  Maze maze = new Maze(rows, cols);
+
+  // render the maze
+  for (int i = 0; i < cols; ++i)
+  {
+    for (int j = 0; j < rows; ++j)
+    {
+      var room = maze.cells[i, j];
+      if ((room & Maze.UP) != 0)
+        DrawLine(i * cellWidth + cellWidth / 2,
+                j * cellWidth,
+                i * cellWidth + cellWidth / 2,
+                j * cellWidth + cellWidth / 2 - 1);
+      if ((room & Maze.DOWN) != 0)
+        DrawLine(i * cellWidth + cellWidth / 2,
+              j * cellWidth + cellWidth / 2,
+              i * cellWidth + cellWidth / 2,
+              j * cellWidth + cellWidth - 1);
+      if ((room & Maze.RIGHT) != 0)
+        DrawLine(i * cellWidth + cellWidth / 2,
+              j * cellWidth + cellWidth / 2,
+              i * cellWidth + cellWidth - 1,
+              j * cellWidth + cellWidth / 2);
+      if ((room & Maze.LEFT) != 0)
+        DrawLine(i * cellWidth,
+              j * cellWidth + cellWidth / 2,
+              i * cellWidth + cellWidth / 2 - 1,
+              j * cellWidth + cellWidth / 2);
+    }
+  }
+}
+{% endhighlight %}
+<p>And created a method that mimics the behaviour of the <code>System.Drawing.Graphics.DrawLine</code> method which the original maze code depended on:</p>
+{% highlight csharp %}
+private void DrawLine(double x1, double y1, double x2, double y2)
+{
+  double width = x2 - x1 + 2.0;
+  if (width == 0.0) width = 2.0;
+
+  double height =  y2 - y1+ 2.0;
+  if (height == 0.0) height = 2.0;
+
+  var rec = new System.Windows.Shapes.Rectangle()
+  {
+    Fill = new SolidColorBrush(Colors.Red),
+    Width = width,
+    Height = height
+  };
+  Canvas.SetLeft(rec, x1);
+  Canvas.SetTop(rec, y1);
+  mazeContainer.Children.Add(rec);
+
+  AddPhysicsBody(rec, true);
+}
+{% endhighlight %}
+<p>A bit messy, but gets the job done!</p>
+<p>The above code creates a maze comprised of static physics objects, where the<code> _mazeSize</code> field dictates the scale of the maze:</p>
+<p><img src="{{ site.baseurl }}/archive/2011/12/Mazes.png" alt="" title="Mazes" width="500" height="454" class="aligncenter size-full wp-image-1902" /></p>
+<h2>Adding a Rolling Ball</h2>
+<p>Adding a ball to the maze is simply a matter of creating an ellipse and adding it at the maze entrance. Note, this physics-body is not static, so will move under the influence of gravity:</p>
+{% highlight csharp %}
+Ellipse ball = new Ellipse()
+{
+  Width = cellWidth * 0.7,
+  Height = cellWidth * 0.7,
+  Fill = this.Resources["brush"] as Brush
+};
+Canvas.SetLeft(ball, ((cols / 2) + 0.7) * cellWidth);
+Canvas.SetTop(ball, 0);
+mazeContainer.Children.Add(ball);
+
+AddPhysicsBody(ball, false);
+{% endhighlight %}
+<p>By default, the 'world' has gravity with a fixed Y component and no X component. This causes all non-static bodies to fall downwards as you might expect. In order to guide the ball around the maze by tilting the phone, we need to adjust gravity based on accelerometer readings. This is achieved by the following code:</p>
+{% highlight csharp %}
+private void HandleAccelerometer()
+{
+  _sensor = new Accelerometer();
+  _sensor.Start();
+
+  // 10 times a second, update the gravity
+  var gtimer = new DispatcherTimer();
+  gtimer.Interval = TimeSpan.FromSeconds(0.1);
+  gtimer.Tick += (s, e) =>
+  {
+    if (_physicsController.Simulator != null)
+    {
+      _physicsController.Simulator.Gravity.Y = 5 * -_sensor.CurrentValue.Acceleration.Y;
+      _physicsController.Simulator.Gravity.X = 5 * _sensor.CurrentValue.Acceleration.X;
+    }
+  };
+  gtimer.Start();
+}
+{% endhighlight %}
+<p><strong>Note</strong>: this uses a timer, rather than updating the simulator every time the accelerometer reading changes. I found that without the timer, I was repeatedly seeing the generic "Element is already a child of another element" exception. You will also notice in the code that the maze is built after a pause of a couple of seconds, again in order to avoid this issue. There's something funny going on inside the Physics Helper!</p>
+<p>Finally, we handle collisions in order to play a simple sounds effect a the ball bounces off each wall:</p>
+{% highlight csharp %}
+// locate the physics controller
+_physicsController = mazeContainer.GetValue(PhysicsControllerMain.PhysicsControllerProperty) as PhysicsControllerMain;
+      
+// load the WAV file
+Stream stream = TitleContainer.OpenStream("boing1.wav");
+_effect = SoundEffect.FromStream(stream);
+FrameworkDispatcher.Update();
+
+// play on each collision
+_physicsController.Collision += (s,e) => _effect.Play(); 
+{% endhighlight %}
+<p>And there we have it, a simple maze game powered by the Farseer Physics engine. The whole thing only took about an hour to create, with code grabbed from the internet - a bit rough and ready, but I was impressed with how easy it was to create this game. There is much more that could be done, for example detecting when the ball reaches the end of the maze, advancing to a more difficult level, however, my time has run out on this bit of fun ... Also, if I were to take this idea further, I would probably use XNA rather than Silverlight. The Physics Helper is great for simple XAML-only physics models, but I feel that it wasn't really built for programmatic creation of bodies.</p>
+<p>You can download the code here: <a href='{{ site.baseurl }}/archive/2011/12/WP7MazeGame.zip'>WP7MazeGame.zip</a></p>
+<p>Note, you will have to download and install Physics Helper to run this code.</p>
+<p>On another note, Farseer is clearly the result of hundreds of hours of development effort, which makes it easy to create realistic physics-based applications and games. Farseer is free to use under the MS-PL licence. However, I would urge anyone who has used this great library to create a WP7 game to donate via the <a href="http://farseerphysics.codeplex.com/">Farseer codeplex site</a> (scroll to the bottom).</p>
+<p>Regards, Colin E.</p>

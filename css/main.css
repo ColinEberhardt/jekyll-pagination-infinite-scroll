@@ -8,6 +8,10 @@ textarea {
     color: #222;
 }
 
+a {
+    color: #e44d26;
+}
+
 html {
     font-size: 1em;
     line-height: 1.4;

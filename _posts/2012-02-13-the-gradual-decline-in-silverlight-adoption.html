@@ -1,0 +1,27 @@
+---
+id: 1982
+author: ceberhardt
+title: "The Gradual Decline in Silverlight Adoption "
+oldlink: "/blog/colin/2012/02/the-gradual-decline-in-silverlight-adoption/"
+tags: 
+  - News
+  - silverlight
+  - adoption
+  - blog
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>Around one year ago I made the prediction that Silverlight would have an overall adoption of 81% by the end of 2011. The adoption statistics are now available and indicate that my predictions were wrong by more than 10%, with Silverlight adoption reaching just 67% at the start of this year. So what went wrong?</p>
+<p>In my <a href="http://www.scottlogic.co.uk/blog/colin/2010/12/silverlight-5-adoption-predictions/" title="Silverlight 5 Adoption Predictions">previous blog post</a> I assumed that Silverlight adoption would follow a sigmoid curve as per the <a href="http://en.wikipedia.org/wiki/Diffusion_of_innovations">Diffusion of Innovation</a> theory. Taking the adoption statistics from <a href="http://www.statowl.com/">StatOwl</a>, I used Excel to fit a logistic function to the data in order to predict the future adoption, arriving at a projected adoption figure of 81% at the end of 2011. However, in my curve fitting it looks like I made one important mistake - I assumed that Silverlight adoption would eventually reach 100%!</p>
+<p>By adjusting my Excel spreadsheet to allow a sub-100% adoption I achieved a much better curve fit and the 2011 predictions were reduced from 81% to 75%. </p>
+<p>However, data from throughout 2011 seems to indicate that the rate of Silverlight adoption is falling (I think <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/the-untimely-demise-of-the-plugin-and-how-lob-developments-will-suffer/" title="The Untimely Demise of the Plugin (and how LOB developments will suffer)">we all know the reason why</a>). Including last years data shows a very good fit to the logistic function, with the rather gloomy outlook that the <strong>adoption is asymptotically tending towards 73%</strong>. </p>
+<p>The graph below shows the adoption statistics reported via StatOwl from 2008 through to 2011, together with my (corrected) predictions based on the data up to 2010, and my predictions based on the complete set of available data.</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/SilverlightAdoption.png" alt="" title="SilverlightAdoption" width="610" height="387" class="aligncenter size-full wp-image-1983" /></p>
+<p>This doesn't compare well with flash where <a href="http://zehfernando.com/2009/flash-penetration-statistics-updated-and-some-context/">the adoption of each new version is faster than the last</a>. With Silverlight adoption statistics tending towards 73% the outlook doesn't look too great. Is this a technology we should still be investing in?</p>
+<p>Personally, I think the answer to this question is "yes" for a couple of reasons:</p>
+<p>Whilst the Silverlight plugin might be losing relevance, Windows 8 Metro and Silverlight for Windows Phone 7 are both XAML languages with a similar API. The skills you learn whilst developing Silverlight or WPF applications are certainly going to be relevant in the future.</p>
+<p>Businesses have an investment in the skills of their employees, but just as importantly, they invest in the code that they write. Whilst there is some comfort in the ability of their employees to easily adopt new technologies, the cost of migrating a code-base is always going to be much greater. It is clear that Silverlight is no longer going to be the Flash-beating plugin that would be the de-facto choice for interactive content on the web (Flash, and the plugin model in general, <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/the-untimely-demise-of-the-plugin-and-how-lob-developments-will-suffer/">is in trouble</a>). However, Silverlight is now a very mature platform that is an appropriate choice for delivery of complex business functionality either within an intranet, where you can control plugin installation, or where the business value of the application being delivered ensures that the 30% without the plugin will install it in order to use your application.</p>
+<p>Now, more than ever, is a time for developers to diversify and learn new skills. </p>
+<p>Regards, Colin E.</p>

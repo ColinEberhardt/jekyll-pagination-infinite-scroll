@@ -1,0 +1,84 @@
+---
+id: 2331
+author: ceberhardt
+title: "Introducing PropertyCross - Helping you select a cross-platform mobile framework"
+title-short: "Introducing PropertyCross"
+oldlink: "/blog/colin/2012/12/introducing-propertycross-helping-you-select-a-cross-platform-mobile-framework/"
+image: "ceberhardt/assets/featured/propertycross.png"
+summary: "Introduces a new open source project that helps developers choose a suitable cross-platform framework"
+summary-short: "Helping you select a cross-platform mobile framework"
+tags: 
+  - codeproject
+  - featuredcolin
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>Today I am happy to announce the launch of <a href="http://propertycross.com">PropertyCross</a>, an open-source project on github comprising 14 different applications for 3 different platforms (iOS, Android and Windows Phone), using 6 different frameworks (native, jQuery Mobile, Sencha Touch, Xamarin, Air) developed by a team of six contributors!</p>
+<p>The aim of PropertyCross is to make it easier for developers to choose a suitable framework from the ever-growing range of cross-platform mobile application development frameworks. This blog post provides a little bit of background to the project.</p>
+<p><a href="http://propertycross.com"><img src="{{ site.baseurl }}/archive/2012/12/PropertyCross.png" alt="PropertyCross" width="600" height="186" class="aligncenter size-full wp-image-2338" /></a></p>
+<h2>Why PropertyCross?</h2>
+<p>One of the main factors that 'seeded' PropertyCross is the on-going debate of "HTML5 vs. Native" for mobile application development. The internet is saturated with White Papers and Business Intelligence documents that make ludicrous claims that "HTML5 will be ready in 2 years time", or similar. These papers drastically over-simplify the problem - in my opinion they are next to worthless!</p>
+<p>Questions people really should be asking are:</p>
+<ul>
+<li>What level of user-experience compromise will I incur by choosing HTML5?</li>
+<li>Which HTML5 framework should I use? (there are a great many of these!)</li>
+<li>How much code-sharing and cost-saving will I achieve in practice by choosing HTML5?</li>
+</ul>
+<p>There will not be a point in time when the answers to all of these questions point to HMTL5. Conversely, there are a great-many applications where HMTL5 is an entirely appropriate technology choice.</p>
+<p>The second factor that encouraged us to embark on the PropertyCross project is that while the tech media is infatuated with HTML5, there are a large number of alternative cross-platform mobile frameworks out there, including Air, Titanium and Xamarin. When selecting a framework for cross-platform development you really should consider non-HTML5 alternatives. Some of these deliver fully-native UIs, which result in a no-compromises user experience.</p>
+<h2>What is PropertyCross?</h2>
+<p>A while back I was working on an enterprise web project where we were going through the process of selecting a suitable JavaScript UI framework. There are even more JavaScript UI frameworks than cross-platform mobile frameworks, so this is not an easy task! </p>
+<p>At this point we turned to <a href="http://addyosmani.github.com/todomvc/">TodoMVC</a>, which is an open source project that demonstrates the same simple to-do list application implemented using a large number of different JavaScript frameworks. Both myself and Chris Price (my PropertyCross co-founder!) found TodoMVC to be so useful that we contributed <a href="http://www.scottlogic.co.uk/blog/colin/2012/03/developing-a-gwt-todomvc-application/">GWT</a> and <a href="http://www.scottlogic.co.uk/2012/02/a-todomvc-closure-example/">Closure</a> implementations.</p>
+<p>One of the most valuable features of the TodoMVC project is that it is very practical. You can see how each framework compares when used to create exactly the same applications. This provides much more depth than a comparison made on headline features or which one Google favours!</p>
+<p>Myself and Chris decided to take the TodoMVC 'template' and apply it to cross-platform mobile development.</p>
+<p>The application that we settled on for PropertyCross is a little more complex than the TodoMVC to-do list application. It is a property finder application, based on one <a href="http://www.codeproject.com/Articles/445361/Property-Finder-a-Cross-Platform-HTML5-Mobile-App">I wrote a little earlier in the year</a>. We selected this as an example because it is non-trivial, having multiple-pages, makes use of storage, geolocation and web services - this should sufficiently 'exercise' each framework!</p>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PhoneIcons.jpg" alt="PhoneIcons" width="599" height="336" class="aligncenter size-full wp-image-2337" /></p>
+<p>One of the underlying goals was that, where possible, each version of the application should be tailored the platform that it runs on. In other words, aiming for a Metro-look on Windows Phone, Roboto on Android and the standard 'Apple' look and feel on iOS. This is because, in my opinion, each mobile platform has a strong visual identity. Maintaining this identity within your own applications is important in order for your application to be successful (although there have been some notable deviants!).</p>
+<p>Currently the app stores are the primary mechanism for distributing mobile applications. With HTML5, this might change over time, but for now, we have decided that all PropertyCross implementations should be packaged as native units.</p>
+<h2>PropertyCross Native</h2>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PCNative.png" alt="PCNative" width="500" height="338" class="aligncenter size-full wp-image-2334" /></p>
+<p>The <a href="http://propertycross.com/native/">native implementations of PropertyCross</a> are included as a benchmark, i.e. they set the bar for user-experience and visuals. They also provide an illustration of the problem that cross-platform development entails, three applications that do essentially the same thing, but with radically different implementations:</p>
+<ul>
+<li>C# / Silverlight for Windows Phone, developed using Visual Studio</li>
+<li>Objective-C for iOS, developed using Xcode</li>
+<li>Java for Android, developed using Eclipse</li>
+</ul>
+<p>Currently the Android version is still being finalised. For the purposes of comparison, the UI looks exactly the same as the Xamarin version.</p>
+<h2>PropertyCross jQueryMobile</h2>
+<p>The <a href="(http://propertycross.com/jquery-mobile/">jQuery Mobile PropertyCross implementation</a> was the first to be added to the project, based on <a href="http://www.codeproject.com/Articles/445361/Property-Finder-a-Cross-Platform-HTML5-Mobile-App">my earlier HTML5 Property Finder app</a>. It uses <a href="http://knockoutjs.com">Knockout</a>, to structure the application layers, <a href="http://jquerymobile.com/">jQuery Mobile</a> (jQM) for for the UI controls, <a href="http://requirejs.org/">RequireJS</a> for dependency management and <a href="http://phonegap.com/">PhoneGap Build</a> for packaging.</p>
+<p>Personally, I have found the jQM PropertyCross application to be a little disappointing. From a development perspective, I wanted to enforce a decent structure to the code, so opted for Knockout which implements the MVVM pattern. Unfortunately <a href="http://www.scottlogic.co.uk/blog/colin/2012/10/integrating-knockout-and-jquerymobile">I found that the two frameworks didn't work well together</a>. We also had quite a few issues with the integration between Windows Phone and PhoneGap, where the PhoneGap APIs provide access to the back button. For various reasons the Windows Phone browser's JavaScript engine keeps falling over - and <a href="https://github.com/ColinEberhardt/PropertyCross/issues/32">there are still some outstanding issues as a result</a>.</p>
+<p>I was also disappointed with the end-user experience of the jQM implementation. The sliding transitions between pages are not that clean, and the Metro styling provided by the <a href="http://sgrebnov.github.com/jqmobile-metro-theme/">jqmobile-metro-theme</a> is not good enough for production use in my opinion. Furthermore, we were unable to find a decent Android 'skin' for jQM.</p>
+<p>However, to be fair on jQM, my feeling is that this framework is not really intended to be used as we have done here. Its primary purpose is to take static HTML content and apply an iOS style. If you have a static website and want to make it look a bit like an iOS app, jQM will certainly do the trick with very little effort. </p>
+<h2>PropertyCross Sencha Touch</h2>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PCSencha.jpg" alt="PCSencha" width="343" height="338" class="aligncenter size-full wp-image-2335" /></p>
+<p>The <a href="http://propertycross.com/sencha-touch-2/">Sencha Touch PropertyCross implementation</a> is another HTML5 cross-platform framework. Where this differs from jQM is that it is designed specifically for cross-platform application development (as opposed to iOS styled website creation). </p>
+<p>Sencha Touch is similar to ExtJS (which Sencha also own), a large and feature-rich framework which is often used for developing complex JavaScript websites and apps.</p>
+<p>Sencha Touch provides a relatively 'thick' UI abstraction layer, to the point where you do not write HMTL, instead the UI is defined in JSON. Personally, I am not that keen on this approach. One of the key advantages of using HTML5, is the fact that it is HTML! It is a shame to throw away the tools and decades of developer experience that HTML brings with it. We also struggled with the Sencha packaging tools, so opted to use PhoneGap build instead!</p>
+<p>From a user perspective, I found the Sencha Touch implementation to be quite impressive. The UI does not adapt to the platform (i.e. iOS and Android looks the same), however, it looks smart and feels very responsive. It even incorporates a subtle page transition effect where the header text moves at a different rate to the page body, closely mimicking the native Android UI. </p>
+<p>Sencha certainly seem to be pushing the boundaries of HTML5 UI development - <a href="http://www.sencha.com/blog/the-making-of-fastbook-an-html5-love-story/">they recently launched Fastbook</a>, which is a fully HTML5 Facebook client. Their aim is to demonstrate that the reason the Facebook HTML5-based app failed is simply because it was poorly written, not because the technology is not ready yet. I am inclined to agree with them on this one!</p>
+<p>My feeling is that Sencha Touch has a steep learning curve, it is JavaScript-based, but relies on a lot of proprietary APIs. However, once learnt, I have a feeling you can create functional cross-platform application very quickly. I do have some concerns about the declarative approach to the UI, and I wonder how easy it would be to create a more unique UI than the one we opted for with PropertyCross.</p>
+<h2>PropertyCross Xamarin</h2>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PCNative.png" alt="PCNative" width="500" height="338" class="aligncenter size-full wp-image-2334" /></p>
+<p>The <a href="http://propertycross.com/xamarin/">Xamarin PropertyCross implementatio</a>n was the first non-HTML5 framework that we added to the project. Xamarin is based on the Mono project and allows you to write cross-platform applications using C# and the .NET framework. </p>
+<p>Xamarin do not provide a UI abstraction layer, instead they provide C# bindings for the native iOS and Android UI APIs. There are no bindings required for Windows Phone because C# / .NET  is the native environment on this platform.</p>
+<p>When using Xamarin for cross platform development you have to structure your code so that the business logic is shared across the different platforms. To maximise code sharing we used the Model View Presenter (MVP) pattern, which allows sharing of both business logic (in the Model layer), and UI logic (in the Presenter layer). </p>
+<p>The lack of UI layer abstraction means that there is less shared code when compared with HTML5 technologies. This means that in general there is more effort required when writing cross platforms applications with Xamarin.</p>
+<p>The key strengths of the Xamarin approach are that it uses a popular, robust and feature rich language (C#), which is well suited for the development of complex business logic (when compared to JavaScript). Furthermore, the UI is fully native, which means that you get the best user-experience possible on each platform.</p>
+<p>I quite like the Xamarin approach. It bugs me when I see second-rate mobile applications, so like the fact that using Xamarin means that I do not have to make and user experience compromises.</p>
+<h2>PropertyCross Titanium</h2>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PCTitanium.jpg" alt="PCTitanium" width="338" height="333" class="aligncenter size-full wp-image-2336" /></p>
+<p>The <a href="http://propertycross.com/titanium/">Titanium PropertyCross implementation</a> is another framework that delivers a fully native UI, but differs from Xamarin in that it uses JavaScript.</p>
+<p>Despite the fact that Xamarin and Titanium deliver native UIs, they are very different. The Titanium APIs provide an abstraction layer for the Android and iOS APIs, which results in a more code shared than the Xamarin implementation. However, the abstraction is not complete, so platform-specific concepts do leak into your code.Like Sencha Touch, Titanium does not use HTML markup for defining the UI. And again, my feeling is that developers will find Titanium to be a steep learning curve. </p>
+<p>I do not find myself drawn to Titanium, the tooling and frameworks feel a little haphazard with leaky abstractions and complex builds. I also wonder, why JavaScript? I have nothing against the language, but do favour strongly-typed alternatives when they are available. The team behind Titanium could have used picked any language for their tools.</p>
+<h2>PropertyCross AIR</h2>
+<p><img src="{{ site.baseurl }}/archive/2012/12/PCAir.jpg" alt="PCAir" width="343" height="338" class="aligncenter size-full wp-image-2332" /></p>
+<p>The <a href="http://propertycross.com/air/">AIR PropertyCross implementation</a> was one of the last to be added to the project. It uses the Adobe Integrated Runtime (AIR), which is used for running Flash and Flex applications. </p>
+<p>Mobile AIR builds on a mature set of languages and tools that Adobe have been developing for many years. The UI for the AIR implementation is neither native or HTML5, instead it is rendered directly, although it does look quite at home on an iOS device.</p>
+<p>I was pleasantly surprised by the AIR implementation. The developer story is very good, using mature languages and frameworks, the code is 100% shared, and the end user experience is very good.</p>
+<p>Unfortunately I think that Mobile AIR might struggle to be widely adopted because Flash is being pushed out of the web, due to the rise in tablet / mobile usage, and <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/the-untimely-demise-of-the-plugin-and-how-lob-developments-will-suffer/">Flex being dropped by Adobe</a>. These two events will probably result in a stigma being attached to what is otherwise a very promising technology. Hopefully PropertyCross can play a small part in raising awareness of Mobile AIR.</p>
+<h2>Conclusions</h2>
+<p>Now that the project has gone live, hopefully this is just the start!</p>
+<p>The project is open source and hosted on github and I hope that others will feel the urge to contribute. There are a number of other frameworks out there that I would love to see included, Kendo UI (an HTML5 framework that has a BlackBerry skin), MoSync ( another that delivers a natuve-UI but this time using C++), Qt, RhoMobile, Corona, jQTouch, DXTREME, Moscrif, appMobi ... and many more.</p>
+<p>Feel free to <a href="https://github.com/colineberhardt/PropertyCross/">fork the github project and contribute</a>.</p>

@@ -1,0 +1,692 @@
+---
+author: ceberhardt
+title: A Statistical Analysis of the Apple App Store
+image: "ceberhardt/assets/featured/stats.png"
+categories: 
+tags:
+ - featuredcolin
+summary: The App Store continues its rapid growth, with approximately 300,000 apps added each year. I decided it would be fun to download as much app metadata as possible in order to see what patterns and trends I could find. This blog post describes the results.
+summary-short: "An analysis of 75,000 apps"
+layout: default_post
+---
+
+<style>
+
+    .chart g.columnContainer,
+    .chart g.barContainer,
+    .chart g.slice {
+        opacity: 0.8;
+    }
+
+    .chart * {
+        -webkit-transition: opacity 0.2s; 
+        transition: opacity 0.2s;        
+    }
+
+    .chart {
+        margin:20px auto 20px auto;
+        display: block;
+    }
+
+    .chart g.columnContainer:hover,
+    .chart g.barContainer:hover,
+    .chart g.slice:hover {
+        opacity: 1.0;
+    }
+
+    .chart g.slice:hover path {
+        stroke:white;
+        stroke-width:2px;
+    }
+
+    .chart rect, .chart circle {
+      fill: steelblue;
+    }
+
+    .chart g.highlighted rect {
+      fill: SpringGreen;
+    }
+
+    .categoryLabel {
+       text-anchor: end;
+    }
+
+    .slice .valueLabel {
+       text-anchor: middle;
+    }
+
+    .valueLabel {
+        opacity: 0.0;
+        font-size: 14px;
+    }
+    .columnContainer .innerLabel {
+        text-anchor: end;
+        fill: white;
+    }
+    .columnContainer .outerLabel {
+        text-anchor: start;
+        fill: black;
+    }
+
+    .barContainer .valueLabel {
+      text-anchor: middle;
+    }
+    .barContainer .innerLabel {
+        fill: white;
+    }
+    .barContainer .outerLabel {
+        fill: black;
+    }
+
+    g.barContainer:hover .valueLabel, 
+    g.columnContainer:hover .valueLabel,
+    g.slice:hover .valueLabel {
+        opacity: 1.0;
+    }
+
+    svg text {
+        font-size: 16px;
+        font-family: Helvetica, sans-serif;
+    }
+
+    .axis .tick line, .axis path {
+        fill: none;
+        stroke: black;
+    }
+
+    .axis text {
+        font: 14px sans-serif;
+    }
+
+    .chart path.line {
+        stroke: steelblue;
+        fill: none;
+    }
+
+    .chart path.line.trendline {
+        stroke : darkgray;
+        stroke-dasharray : 5,5;
+    }
+
+    .chart path.line {
+        stroke-width: 2;
+    }
+
+    .chart .axis path {
+        fill: none;
+    }
+</style>
+
+<script src="{{ site.baseurl }}/ceberhardt/assets/app-store-analysis/d3.min.js"></script>
+<script src="{{ site.baseurl }}/ceberhardt/assets/app-store-analysis/es5-shim.min.js"></script>
+<script src="{{ site.baseurl }}/ceberhardt/assets/app-store-analysis/modernizr.custom.57943.js"></script>
+
+<script>
+if (!Modernizr.svg) {
+    document.write("<p><b>NOTICE</b>: This blog post uses SVG graphics, which your browser does not support. Please use a more modern browser!</p>");
+}
+</script>
+
+<script>
+
+function createChart(element, size, margin) {
+    return d3.select(element)
+        .attr("width", size.width + margin.left + margin.right)
+        .attr("height", size.height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+};
+
+function createLine(x, y, xVal, yVal) {
+    return  d3.svg.line()
+        .x(function(d) { return x(d[xVal]); })
+        .y(function(d) { return y(d[yVal]); });
+}
+
+function addXAxisLabel(chart, size, margin, text) {
+    chart.append("text")
+        .attr("text-anchor", "middle")
+        .attr("x", size.width / 2 + margin.left)
+        .attr("y", size.height + margin.bottom * 0.8)
+        .text(text);
+}
+
+function addYAxisLabel(chart, size, margin, text) {
+    chart.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 6)
+        .attr("dy", "-50px")
+        .attr("dx", -(margin.top + size.height / 2))
+        .style("text-anchor", "middle")
+        .text(text);
+}
+
+
+function createBarChart(id, data) {
+    var width = 400,
+        height = 250,
+        axisHeight = 25;
+
+    var y = d3.scale.linear()
+        .domain([0, d3.max(data, function(d) { return d.value})])
+        .range([height, 0]);
+
+    var x = d3.scale.ordinal()
+        .domain(data.map(function(d){return d.key}))
+        .rangeBands([0, width], .02);
+
+    var chart = d3.select(id)
+        .attr("width", width)
+        .attr("height", height + axisHeight)
+        .append("g")
+        .attr("transform", "translate(0, 0)");
+
+    // create the containers
+    var bar = chart.selectAll("g")
+        .data(data)
+      .enter().append("g")
+          .attr("class", "barContainer")
+        .attr("transform", function(d) { return "translate(" + x(d.key) + ",0)"; });
+
+    // create the bars
+    bar.append("rect")
+        .attr("y", function(d) { return y(d.value); })
+        .attr("height", function(d) { return height - y(d.value); })
+        .attr("width", x.rangeBand());
+
+    function greaterThanHalf(d) {
+        return y(d.value) > (height - axisHeight) /2;
+    }
+
+    // create the value labels
+    bar.append("text")
+        .attr("x", x.rangeBand() / 2)
+        .attr("y", function(d) { return y(d.value); })
+        .attr("class", function(d) { return greaterThanHalf(d) ? "valueLabel outerLabel" : "valueLabel innerLabel"})
+        .attr("dy", function(d) { return greaterThanHalf(d) ? "-.35em" : "1.35em"})
+        .text(function(d) { return d.formattedValue; });
+
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .tickValues(d3.range(1, 6, 1))
+        .orient("bottom");
+
+    chart.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + height + ")")
+        .call(xAxis);
+}
+
+function createColumnChart(id, data, showAxis) {
+    // sort by value
+    data.sort(function(a,b) { return b.value - a.value; });
+
+    var width = 400,
+        baseline = 150,
+        barHeight = 20,
+        axisHeight = showAxis ? 30 : 0.0;
+
+    var x = d3.scale.linear()
+        .domain([0, d3.max(data, function(d) { return d.value * 1.1})])
+        .range([0, width - baseline]);
+
+    var chart = d3.select(id)
+        .attr("width", width)
+        .attr("height", barHeight * data.length + axisHeight);
+
+    // create the containers
+    var bar = chart.selectAll("g")
+        .data(data)
+      .enter().append("g")
+      .attr("class", "columnContainer")
+        .attr("transform", function(d, i) { return "translate(" + baseline + "," + (axisHeight + i * barHeight) + ")"; });
+
+    // create the bars
+    bar.append("rect")
+        .attr("width", function(d) { return x(d.value)})
+        .attr("height", barHeight - 1);
+
+    // create the category labels
+    bar.append("text")
+        .attr("class", "categoryLabel")
+        .attr("y", barHeight / 2)
+        .attr("transform", "translate(-5, 0)")
+        .attr("dy", ".35em")
+        .text(function(d) { return d.key; });
+
+    function greaterThanHalf(d) {
+        return x(d.value) > (width - baseline) /2;
+    }
+
+    // create the value labels
+    bar.append("text")
+        .attr("y", barHeight / 2)
+        .attr("x", function(d) { return x(d.value); })
+        .attr("dy", ".35em")
+        .attr("class", function(d) { return greaterThanHalf(d) ? "valueLabel innerLabel" : "valueLabel outerLabel"})
+        .attr("dx", function(d) { return greaterThanHalf(d) ? "-.35em" : ".35em"})
+        .text(function(d) { return d.formattedValue; });
+
+    if(showAxis) {
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient("top")
+            .tickFormat(function(v) { return "$" + v;});
+
+        chart.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(" + baseline + "," + (axisHeight - 2) +")")
+            .call(xAxis);
+    }
+};
+</script>
+
+
+
+<p>The App Store continues its rapid growth, with approximately 300,000 apps added each year. For a bit of fun I decided to download as much app metadata as I could in order to find patterns within the App Store data. I found that 75% of apps are free, 60% have no ratings, the Entertainment category has the worst user ratings, developers employ psychological pricing techniques, there is a correlation between price and rating, and a whole lot more ...</p>
+
+<p>Knowledge of the statistics and trends present within App Store data is a valuable tool for both app developers and iOS product developers, like our very own <a href="http://www.shinobicontrols.com/">ShinobiControls</a> team.</p>
+
+<h2>Downloading The App Store Data</h2>
+
+<p>Apple actually make it quite easy for you to access app metadata by exposing an API for searching the App Store. You can use queries of the following form to search for app listings:</p>
+
+<pre>
+https://itunes.apple.com/search?country=us&entity=software&term=flappy
+</pre>
+
+<p>
+The query returns data in JSON format including details such as the supported devices, price, rating, category, release date, app size (in bytes) and more. You can find documentation for this API on the <a href="https://www.apple.com/itunes/affiliates/resources/documentation/itunes-store-web-service-search-api.html">Apple Affiliate Resource</a> pages.
+</p>
+
+<p>
+This search API is great if you know what you are looking for, but for this data-gathering project I just wanted to download anything and everything! Unfortunately the App Store doesn't expose an API for navigation and as a result there is no way to obtain a list of apps per category.
+</p>
+
+<p>
+To solve this problem I devised a simple method that was a combination of brute force and monte carlo sampling. I wrote a simple node app that searched for random three letter string. The search results were inspected for new apps, and any new data was stored in a simple file-database. This app ran at a rate of one query every few seconds and leaving it running overnight gave me a dataset of 75,000 apps!
+</p>
+
+<p>
+Time to analyse the data &hellip;
+</p>
+
+<h2>Category Distribution</h2>
+
+<p>
+Once I had obtained my database of app metadata, I wrote some simple JavaScript data analysis routines which output their results in JSON format. I used <a href="http://d3js.org/">D3.js</a> (a tool I have been meaning to try out for ages) to visualise these results.
+</p>
+
+<p>
+One of the simplest analyses was to look at the distribution of apps within the various categories:
+</p>
+
+
+<svg id="appStoreCategoryChart" class="chart"></svg>
+<script>
+(function(){
+    var categoryDistribution = [{"key":"Sports","value":3042},{"key":"Business","value":6876},{"key":"Travel","value":3152},{"key":"News","value":2268},{"key":"Navigation","value":1202},{"key":"Education","value":7683},{"key":"Entertainment","value":5866},{"key":"Finance","value":3040},{"key":"Photo & Video","value":1858},{"key":"Book","value":2178},{"key":"Games","value":12145},{"key":"Social Networking","value":1485},{"key":"Utilities","value":4924},{"key":"Reference","value":2754},{"key":"Medical","value":2648},{"key":"Health & Fitness","value":2176},{"key":"Lifestyle","value":5129},{"key":"Productivity","value":2417},{"key":"Weather","value":336},{"key":"Food & Drink","value":1116},{"key":"Music","value":2740},{"key":"Catalogs","value":393}];
+
+    categoryDistribution.forEach(function(d) {
+        d.formattedValue = new Number(d.value).toLocaleString();
+    });
+    createColumnChart("#appStoreCategoryChart", categoryDistribution);
+}());
+</script>
+
+
+<p>
+Nothing terribly surprising there, Games is the biggest category accounting for 16% of all of the apps within the App Store, reflecting not just the popularity of iOS Games, but the somewhat broad nature of this category. Weather is the smallest category, no doubt reflecting the restrictive nature of this category.
+</p>
+
+<h2>Ratings Distribution</h2>
+
+<p>
+For any app developer the ratings their users provide via the store are of critical importance. They are the primary mechanism for receiving user feedback, and an app's rating, whether good or bad, will play a critical part in determining whether a user will download an app when it appears in search listings.
+</p>
+
+<p>
+I ran a simple query on my data to determine the distribtion of user ratings. I found that 60% of apps do not have any user ratings, and of the remaining 40%, I found the following ratings distribution:
+</p>
+
+<svg id="ratingsChart" class="chart vertical"></svg>
+<script>
+
+(function(){
+    var ratings = [{"key":"1","value":0.005872539205872539},{"key":"1.5","value":0.016649983316649984},{"key":"2","value":0.04734734734734735},{"key":"2.5","value":0.10146813480146813},{"key":"3","value":0.14858191524858191},{"key":"3.5","value":0.17347347347347347},{"key":"4","value":0.21374708041374707},{"key":"4.5","value":0.21441441441441442},{"key":"5","value":0.07844511177844511}];
+
+    ratings.forEach(function(d) {
+        d.formattedValue = (d.value * 100).toFixed(1) + "%";
+    });
+    createBarChart("#ratingsChart", ratings);
+}());
+</script>
+
+It is good to know that very few apps have an average rating of 1.0, and that 4.5 is the <a href="http://en.wikipedia.org/wiki/Mode_(statistics)">mode</a> (i.e. most frequent), pointing to an reasonably satisfied bunch of iOS users. However, with the large number of apps in the Games category, I'd expect the ratings distribution from that category to dominate the overall distribution.
+
+<h2>Ratings By Category</h2>
+
+<p>
+I decided to repeat the ratings distribution measurement, but this time creating the histogram on a per-category basis. The following shows the resulting distribution for each category, ordered by the overall average rating for each category:
+</p>
+
+<svg id="ratingsByCategory" class="chart"></svg>
+<script>
+(function(){
+    var data = [{"category":"Entertainment","ratings":[{"key":"1","value":20},{"key":"1.5","value":51},{"key":"2","value":217},{"key":"2.5","value":440},{"key":"3","value":593},{"key":"3.5","value":535},{"key":"4","value":469},{"key":"4.5","value":409},{"key":"5","value":161}],"mode":"3","averageRating":"3.39"},{"category":"Utilities","ratings":[{"key":"1","value":20},{"key":"1.5","value":60},{"key":"2","value":160},{"key":"2.5","value":277},{"key":"3","value":332},{"key":"3.5","value":315},{"key":"4","value":329},{"key":"4.5","value":322},{"key":"5","value":127}],"mode":"3","averageRating":"3.41"},{"category":"Navigation","ratings":[{"key":"1","value":7},{"key":"1.5","value":15},{"key":"2","value":40},{"key":"2.5","value":81},{"key":"3","value":73},{"key":"3.5","value":99},{"key":"4","value":105},{"key":"4.5","value":85},{"key":"5","value":32}],"mode":"4","averageRating":"3.43"},{"category":"Travel","ratings":[{"key":"1","value":10},{"key":"1.5","value":24},{"key":"2","value":50},{"key":"2.5","value":98},{"key":"3","value":122},{"key":"3.5","value":137},{"key":"4","value":147},{"key":"4.5","value":128},{"key":"5","value":67}],"mode":"4","averageRating":"3.49"},{"category":"News","ratings":[{"key":"1","value":8},{"key":"1.5","value":16},{"key":"2","value":41},{"key":"2.5","value":100},{"key":"3","value":146},{"key":"3.5","value":136},{"key":"4","value":122},{"key":"4.5","value":135},{"key":"5","value":60}],"mode":"3","averageRating":"3.50"},{"category":"Productivity","ratings":[{"key":"1","value":7},{"key":"1.5","value":27},{"key":"2","value":56},{"key":"2.5","value":129},{"key":"3","value":172},{"key":"3.5","value":164},{"key":"4","value":222},{"key":"4.5","value":185},{"key":"5","value":56}],"mode":"4","averageRating":"3.51"},{"category":"Business","ratings":[{"key":"1","value":10},{"key":"1.5","value":36},{"key":"2","value":68},{"key":"2.5","value":145},{"key":"3","value":172},{"key":"3.5","value":203},{"key":"4","value":201},{"key":"4.5","value":201},{"key":"5","value":113}],"mode":"3.5","averageRating":"3.54"},{"category":"Weather","ratings":[{"key":"1","value":3},{"key":"1.5","value":4},{"key":"2","value":8},{"key":"2.5","value":24},{"key":"3","value":26},{"key":"3.5","value":43},{"key":"4","value":46},{"key":"4.5","value":30},{"key":"5","value":14}],"mode":"4","averageRating":"3.55"},{"category":"Finance","ratings":[{"key":"1","value":6},{"key":"1.5","value":22},{"key":"2","value":50},{"key":"2.5","value":114},{"key":"3","value":140},{"key":"3.5","value":141},{"key":"4","value":190},{"key":"4.5","value":171},{"key":"5","value":96}],"mode":"4","averageRating":"3.60"},{"category":"Medical","ratings":[{"key":"1","value":5},{"key":"1.5","value":12},{"key":"2","value":42},{"key":"2.5","value":74},{"key":"3","value":126},{"key":"3.5","value":139},{"key":"4","value":138},{"key":"4.5","value":143},{"key":"5","value":74}],"mode":"4.5","averageRating":"3.61"},{"category":"Sports","ratings":[{"key":"1","value":4},{"key":"1.5","value":17},{"key":"2","value":55},{"key":"2.5","value":122},{"key":"3","value":147},{"key":"3.5","value":165},{"key":"4","value":179},{"key":"4.5","value":180},{"key":"5","value":107}],"mode":"4.5","averageRating":"3.61"},{"category":"Food & Drink","ratings":[{"key":"1","value":3},{"key":"1.5","value":4},{"key":"2","value":15},{"key":"2.5","value":30},{"key":"3","value":51},{"key":"3.5","value":45},{"key":"4","value":66},{"key":"4.5","value":48},{"key":"5","value":32}],"mode":"4","averageRating":"3.62"},{"category":"Lifestyle","ratings":[{"key":"1","value":23},{"key":"1.5","value":34},{"key":"2","value":85},{"key":"2.5","value":189},{"key":"3","value":257},{"key":"3.5","value":273},{"key":"4","value":286},{"key":"4.5","value":335},{"key":"5","value":204}],"mode":"4.5","averageRating":"3.63"},{"category":"Music","ratings":[{"key":"1","value":5},{"key":"1.5","value":22},{"key":"2","value":71},{"key":"2.5","value":127},{"key":"3","value":240},{"key":"3.5","value":228},{"key":"4","value":294},{"key":"4.5","value":266},{"key":"5","value":132}],"mode":"4","averageRating":"3.65"},{"category":"Photo & Video","ratings":[{"key":"1","value":5},{"key":"1.5","value":21},{"key":"2","value":50},{"key":"2.5","value":119},{"key":"3","value":175},{"key":"3.5","value":187},{"key":"4","value":235},{"key":"4.5","value":297},{"key":"5","value":68}],"mode":"4.5","averageRating":"3.66"},{"category":"Catalogs","ratings":[{"key":"2","value":3},{"key":"2.5","value":10},{"key":"3","value":10},{"key":"3.5","value":18},{"key":"4","value":22},{"key":"4.5","value":15},{"key":"5","value":6}],"mode":"4","averageRating":"3.68"},{"category":"Social Networking","ratings":[{"key":"1","value":3},{"key":"1.5","value":12},{"key":"2","value":41},{"key":"2.5","value":65},{"key":"3","value":85},{"key":"3.5","value":136},{"key":"4","value":134},{"key":"4.5","value":151},{"key":"5","value":71}],"mode":"4.5","averageRating":"3.68"},{"category":"Health & Fitness","ratings":[{"key":"1","value":2},{"key":"1.5","value":27},{"key":"2","value":55},{"key":"2.5","value":84},{"key":"3","value":117},{"key":"3.5","value":120},{"key":"4","value":154},{"key":"4.5","value":241},{"key":"5","value":98}],"mode":"4.5","averageRating":"3.70"},{"category":"Reference","ratings":[{"key":"1","value":11},{"key":"1.5","value":26},{"key":"2","value":34},{"key":"2.5","value":74},{"key":"3","value":131},{"key":"3.5","value":175},{"key":"4","value":215},{"key":"4.5","value":237},{"key":"5","value":105}],"mode":"4.5","averageRating":"3.73"},{"category":"Book","ratings":[{"key":"1","value":1},{"key":"1.5","value":8},{"key":"2","value":25},{"key":"2.5","value":62},{"key":"3","value":105},{"key":"3.5","value":147},{"key":"4","value":215},{"key":"4.5","value":152},{"key":"5","value":73}],"mode":"4","averageRating":"3.75"},{"category":"Education","ratings":[{"key":"1","value":14},{"key":"1.5","value":25},{"key":"2","value":64},{"key":"2.5","value":164},{"key":"3","value":282},{"key":"3.5","value":379},{"key":"4","value":562},{"key":"4.5","value":539},{"key":"5","value":195}],"mode":"4","averageRating":"3.78"},{"category":"Games","ratings":[{"key":"1","value":9},{"key":"1.5","value":36},{"key":"2","value":189},{"key":"2.5","value":513},{"key":"3","value":951},{"key":"3.5","value":1414},{"key":"4","value":2075},{"key":"4.5","value":2156},{"key":"5","value":460}],"mode":"4.5","averageRating":"3.82"}];
+
+    // sort by the number of '1' ratings
+    data.sort(function(a,b) { return b.averageRating - a.averageRating; });
+
+    var width = 400,
+        baseline = 150,
+        rowHeight = 30,
+        barWidth = 20;
+
+    var chart = d3.select("#ratingsByCategory")
+        .attr("width", width)
+        .attr("height", rowHeight * data.length);
+
+    // create the containers for each category
+    var bar = chart.selectAll("g")
+        .data(data)
+        .enter()
+        .append("g")
+        .attr("transform", function(d, i) { return "translate(" + baseline + "," + i * rowHeight + ")"})
+        // render the ratings for this category
+        .each(ratingsChart);
+
+    // create the category labels
+    bar.append("text")
+        .attr("class", "categoryLabel")
+        .attr("y", rowHeight / 2)
+        .attr("transform", "translate(-5, 0)")
+        .attr("dy", ".35em")
+        .text(function(d) { return d.category; });
+
+    function ratingsChart(data) {
+        var g = d3.select(this);
+        var height = rowHeight - 10;
+        var mode = data.mode;
+
+        var y = d3.scale.linear()
+                .domain([0, d3.max(data.ratings, function(d) { return d.value})])
+                .range([height, 0]);
+
+        // create the containers
+        var bar = g.selectAll("g")
+            .data(data.ratings)
+            .enter()
+            .append("g")
+            .attr("transform", function(d, i) { return "translate(" + (d.key * 2) * barWidth + ", 0 )"; });
+
+        // create the bars
+        bar.append("rect")
+            .attr("y", function(d) { return y(d.value); })
+           
+            .attr("height", function(d) { return height - y(d.value); })
+            .attr("width", barWidth);
+    }
+}());
+</script>
+
+<p>The ratings distributions are quite different between the various categories, with apps in the Entertainment category having the poorest user ratings, with a mode of just 3.0.</p>
+
+<h2>Filesizes</h2>
+
+The metadata for each app includes its filesize, in bytes, which allowed me to generate a filesize frequency distribution shown below:
+
+<svg id="filesize" class="chart"></svg>
+
+<script>
+(function() {
+    var data = [{"key":"0.0","value":3387},{"key":"1","value":6526},{"key":"2","value":5473},{"key":"3","value":4729},{"key":"4","value":4206},{"key":"5","value":3591},{"key":"6","value":3230},{"key":"7","value":2908},{"key":"8","value":2768},{"key":"9","value":2518},{"key":"10","value":2270},{"key":"11","value":2024},{"key":"12","value":1864},{"key":"13","value":1697},{"key":"14","value":1607},{"key":"15","value":1582},{"key":"16","value":1463},{"key":"17","value":1307},{"key":"18","value":1185},{"key":"19","value":1156},{"key":"20","value":1064},{"key":"21","value":941},{"key":"22","value":776},{"key":"23","value":691},{"key":"24","value":687},{"key":"25","value":618},{"key":"26","value":576},{"key":"27","value":533},{"key":"28","value":538},{"key":"29","value":541},{"key":"30","value":487},{"key":"31","value":426},{"key":"32","value":381},{"key":"33","value":419},{"key":"34","value":382},{"key":"35","value":344},{"key":"36","value":321},{"key":"37","value":372},{"key":"38","value":302},{"key":"39","value":313},{"key":"40","value":298},{"key":"41","value":316},{"key":"42","value":270},{"key":"43","value":299},{"key":"44","value":277},{"key":"45","value":286},{"key":"46","value":276},{"key":"47","value":294},{"key":"48","value":298},{"key":"49","value":258},{"key":"50","value":218},{"key":"51","value":185},{"key":"52","value":170},{"key":"53","value":149},{"key":"54","value":118},{"key":"55","value":108},{"key":"56","value":120},{"key":"57","value":93},{"key":"58","value":99},{"key":"59","value":100},{"key":"60","value":99},{"key":"61","value":72},{"key":"62","value":81},{"key":"63","value":84},{"key":"64","value":75},{"key":"65","value":86},{"key":"66","value":71},{"key":"67","value":69},{"key":"68","value":104},{"key":"69","value":67},{"key":"70","value":58},{"key":"71","value":63},{"key":"72","value":69},{"key":"73","value":65},{"key":"74","value":65},{"key":"75","value":56},{"key":"76","value":69},{"key":"77","value":58},{"key":"78","value":41},{"key":"79","value":41},{"key":"80","value":53},{"key":"81","value":57},{"key":"82","value":59},{"key":"83","value":38},{"key":"84","value":36},{"key":"85","value":48},{"key":"86","value":35},{"key":"87","value":49},{"key":"88","value":43},{"key":"89","value":39},{"key":"90","value":37},{"key":"91","value":45},{"key":"92","value":43},{"key":"93","value":30},{"key":"94","value":39},{"key":"95","value":33},{"key":"96","value":54},{"key":"97","value":38},{"key":"98","value":32},{"key":"99","value":29},{"key":"100","value":20}];
+
+     var size = {width: 380, height:300},
+        margin = {top:10, left:60, right:20, bottom:50};
+
+    var y = d3.scale.log()
+        .domain([10, 10000])
+        .range([size.height, 0]);
+
+    var x = d3.scale.linear()
+        .domain([0, 100])
+        .range([0, size.width]);
+
+    var chart = createChart("#filesize", size, margin);
+
+    var line = createLine(x, y, "key", "value");
+
+    chart.append("path")
+        .attr("class", "line")
+        .attr("d", line(data));
+
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom");
+
+    chart.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + size.height + ")")
+        .call(xAxis);
+
+    var yAxis = d3.svg.axis()
+        .scale(y)
+        .tickValues([1, 10, 100, 1000, 10000])
+        .orient("left")
+        .tickFormat(function(v) { return v;});
+
+    chart.append("g")
+        .attr("class", "axis")
+        .call(yAxis);
+
+    addXAxisLabel(chart, size, margin, "Filesize (MBytes)");
+    addYAxisLabel(chart, size, margin, "Frequency");
+
+}());
+</script>
+
+One interesting feature of this chart is the small 'bump' at around 50MBytes. Apps that are larger than 50MBytes in size cannot be downloaded using a cellular network connection, they must instead be downloaded via WiFi. This limits the user's ability to install apps on impulse, and as a result if an app is close to this limit, developers will try to reduce the size of assets to bring the app size in under 50MBytes.
+
+<h2>Price Distribution</h2>
+
+<p>Another very sensitive factor in determining the success of an app is its price, with the App Store allowing developers to either give their creations away for free, or sell it at anything between $0.99 to $999.99 dollars.</p>
+
+<p>The following pie chart shows the price frequency distribution of the App Store:</p>
+
+<svg id="pricesPie" class="chart"></svg>
+
+<script>
+(function(){
+    var prices = [{"key":"0.0","value":56621},{"key":"0.99","value":7980},{"key":"1.99","value":3888},{"key":"2.99","value":2151},{"key":"3.99","value":896},{"key":"4.99","value":1312},{"key":"5.99","value":397},{"key":"6.99","value":210},{"key":"7.99","value":146},{"key":"8.99","value":98},{"key":"9.99","value":620},{"key":"10.99","value":50},{"key":"11.99","value":59},{"key":"12.99","value":46},{"key":"13.99","value":38},{"key":"14.99","value":122},{"key":"15.99","value":23},{"key":"16.99","value":23},{"key":"17.99","value":18},{"key":"18.99","value":15},{"key":"19.99","value":199},{"key":"20.99","value":4},{"key":"21.99","value":12},{"key":"22.99","value":1},{"key":"23.99","value":8},{"key":"24.99","value":56},{"key":"25.99","value":11},{"key":"26.99","value":6},{"key":"27.99","value":8},{"key":"28.99","value":8},{"key":"29.99","value":107},{"key":"30.99","value":6},{"key":"31.99","value":1},{"key":"32.99","value":2},{"key":"33.99","value":6},{"key":"34.99","value":27},{"key":"35.99","value":4},{"key":"36.99","value":1},{"key":"37.99","value":11},{"key":"38.99","value":1},{"key":"39.99","value":31},{"key":"40.99","value":1},{"key":"42.99","value":1},{"key":"44.99","value":9},{"key":"48.99","value":1},{"key":"49.99","value":54},{"key":"54.99","value":6},{"key":"59.99","value":16},{"key":"64.99","value":9},{"key":"69.99","value":8},{"key":"74.99","value":9},{"key":"79.99","value":4},{"key":"89.99","value":3},{"key":"94.99","value":1},{"key":"99.99","value":36},{"key":"109.99","value":1},{"key":"119.99","value":4},{"key":"129.99","value":3},{"key":"139.99","value":1},{"key":"149.99","value":3},{"key":"159.99","value":6},{"key":"169.99","value":2},{"key":"179.99","value":1},{"key":"189.99","value":1},{"key":"199.99","value":7},{"key":"219.99","value":2},{"key":"249.99","value":2},{"key":"299.99","value":3},{"key":"399.99","value":2},{"key":"449.99","value":1},{"key":"499.99","value":2},{"key":"599.99","value":1},{"key":"699.99","value":1},{"key":"999.99","value":4}];
+
+
+    var width = 300,
+        height = 300,
+        margin = 30,
+        radius = width / 2 - margin,
+        color = d3.scale.category20c();
+
+    var chart = d3.select("#pricesPie")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .data([prices])
+        .attr("transform", "translate(" + (radius + margin)  + "," + (radius  + margin) + ")");
+
+     var arc = d3.svg.arc()            
+            .outerRadius(radius);
+ 
+    var pie = d3.layout.pie()    
+        .value(function(d) { return d.value; }); 
+ 
+    var arcs = chart.selectAll("g.slice")     
+        .data(pie)                          
+        .enter()                           
+            .append("g")                
+                .attr("class", "slice");  
+ 
+    arcs.append("path")
+            .attr("fill", function(d, i) { return color(i); } )
+            .attr("d", arc);
+
+    arcs.append("svg:text")                  
+            .attr("transform", function(d) { 
+            d.innerRadius = radius * 1.3;
+            d.outerRadius = 0;
+            return "translate(" + arc.centroid(d) + ")"; 
+        })
+        .attr("class", "valueLabel")    
+        .text(function(d, i) { return prices[i].key === "0.0" ? "free" : "$" + prices[i].key; });     
+})();        
+
+</script>
+
+The above chart indicates that over 75% of all the apps in the App Store are free. Looking more closely at the price distribution of the paid-for apps, you can see that the prices are clustered around multiples of five-dollars. Clearly a case of app developers trying to take advantage of <a href="http://en.wikipedia.org/wiki/Psychological_pricing">psychological pricing</a>!
+
+<svg id="pricesColumn" class="chart"></svg>
+
+<script>
+
+(function(){
+    var prices = [{"key":"0.99","value":7980},{"key":"1.99","value":3888},{"key":"2.99","value":2151},{"key":"3.99","value":896},{"key":"4.99","value":1312},{"key":"5.99","value":397},{"key":"6.99","value":210},{"key":"7.99","value":146},{"key":"8.99","value":98},{"key":"9.99","value":620},{"key":"10.99","value":50},{"key":"11.99","value":59},{"key":"12.99","value":46},{"key":"13.99","value":38},{"key":"14.99","value":122},{"key":"15.99","value":23},{"key":"16.99","value":23},{"key":"17.99","value":18},{"key":"18.99","value":15},{"key":"19.99","value":199},{"key":"20.99","value":4},{"key":"21.99","value":12},{"key":"22.99","value":1},{"key":"23.99","value":8},{"key":"24.99","value":56},{"key":"25.99","value":11},{"key":"26.99","value":6},{"key":"27.99","value":8},{"key":"28.99","value":8},{"key":"29.99","value":107},{"key":"30.99","value":6},{"key":"31.99","value":1},{"key":"32.99","value":2},{"key":"33.99","value":6},{"key":"34.99","value":27},{"key":"35.99","value":4},{"key":"36.99","value":1},{"key":"37.99","value":11},{"key":"38.99","value":1},{"key":"39.99","value":31},{"key":"40.99","value":1},{"key":"42.99","value":1},{"key":"44.99","value":9},{"key":"48.99","value":1},{"key":"49.99","value":54}];
+
+    var barWidth = 8,
+        size = {width: barWidth * prices.length, height:300},
+        margin = {top:10, left:60, right:10, bottom:40};
+
+    var y = d3.scale.log()
+        .domain([1, 8000])
+        .range([size.height, 0]);
+
+    var x = d3.scale.linear()
+        .domain([0.5, 55.0])
+        .range([0, size.width]);
+
+    var chart = createChart("#pricesColumn", size, margin);
+
+    // create the containers
+    var bar = chart.selectAll("g")
+        .data(prices)
+      .enter().append("g")
+          .attr("class", function(d, i) { return (Math.round(d.key) % 5 === 0) ? "highlighted" : "" })
+        .attr("transform", function(d, i) { return "translate(" + x(d.key - 0.4) + ",0)"; });
+
+    // create the bars
+    bar.append("rect")
+        .attr("y", function(d) { return y(d.value); })
+        .attr("height", function(d) { return size.height - y(d.value); })
+        .attr("width", barWidth * 0.7);
+
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .tickValues(d3.range(9.99, 51, 10.00))
+        .orient("bottom")
+        .tickFormat(function(v) { return "$" + v.toFixed(2);});
+
+    chart.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + size.height + ")")
+        .call(xAxis);
+
+    var yAxis = d3.svg.axis()
+        .scale(y)
+        .tickValues([1, 10, 100, 1000])
+        .orient("left")
+        .tickFormat(function(v) { return v;});
+
+    chart.append("g")
+        .attr("class", "axis")
+        .call(yAxis);
+
+    addYAxisLabel(chart, size, margin, "Frequency");
+})(); 
+</script>
+
+
+Another interesting statistic is the average price by category:
+
+<svg id="priceByCategory" class="chart"></svg>
+
+<script>
+(function() {
+    var priceByCategory = [{"key":"Sports","value":3.6343883984866987},{"key":"Business","value":12.245555555555347},{"key":"Travel","value":2.5340658049353664},{"key":"News","value":2.503368983957225},{"key":"Navigation","value":11.289349240780782},{"key":"Education","value":6.946993569131753},{"key":"Entertainment","value":2.062874493927063},{"key":"Finance","value":7.416190476190373},{"key":"Photo & Video","value":3.4651286449399734},{"key":"Book","value":4.74958549222785},{"key":"Games","value":2.0440968048084596},{"key":"Social Networking","value":2.567777777777783},{"key":"Utilities","value":3.457983651226028},{"key":"Reference","value":6.233566176470436},{"key":"Medical","value":8.705698393077693},{"key":"Health & Fitness","value":3.358916797488224},{"key":"Lifestyle","value":2.941122853368544},{"key":"Productivity","value":6.294404145077578},{"key":"Weather","value":3.061428571428576},{"key":"Food & Drink","value":2.735283018867931},{"key":"Music","value":4.600878661087803},{"key":"Catalogs","value":3.7252941176470564}]
+
+    priceByCategory.forEach(function(d) {
+        d.formattedValue = "$" + new Number(d.value).toFixed(2);
+    });
+    createColumnChart("#priceByCategory", priceByCategory, true);
+}());
+</script>
+
+<p>
+There is a big difference between the average price for each category with Business apps costing six times more than Games on average. Most of the Categories that have a lower average price are those which we associated with casual use, apps which are used for fun and pleasure. Whereas the high cost categories contain apps that are intended to deliver valuable services, where you might expect to get a return on your $12 investment.
+</p>
+
+<p>
+One final price-related statistic is the correlation between price and user ratings:
+</p>
+
+
+<svg id="priceByRating" class="chart"></svg>
+
+<script>
+(function() {
+    var data = [{"rating":"1","averagePrice":2.546701030927838},{"rating":"1.5","averagePrice":3.2810052910052985},{"rating":"2","averagePrice":3.4316873449131595},{"rating":"2.5","averagePrice":2.9282422802850063},{"rating":"3","averagePrice":3.135045045044961},{"rating":"3.5","averagePrice":4.7908270158510025},{"rating":"4","averagePrice":4.7797406989851785},{"rating":"4.5","averagePrice":5.144657293497172},{"rating":"5","averagePrice":6.286747967479647}];
+
+     var size = {width: 380, height:300},
+        margin = {top:10, left:60, right:10, bottom:50};
+
+    var y = d3.scale.linear()
+        .domain([d3.min(data, function(d) { return d.averagePrice})-0.5, d3.max(data, function(d) { return d.averagePrice})+0.5])
+        .range([size.height, 0]);
+
+    var x = d3.scale.linear()
+        .domain([0.5, 5.5])
+        .range([0, size.width]);
+
+    var chart = createChart("#priceByRating", size, margin);
+
+    var line = createLine(x, y, "rating", "averagePrice");
+
+    chart.append("path")
+        .attr("class", "line trendline")
+        .attr("d", line([{"rating":"1","averagePrice":2.4},{"rating":"5","averagePrice":5.6}]));
+
+        // Dot plot.
+    var dot = chart.selectAll("circle")
+        .data(data)
+      .enter().append("circle")
+        .attr("cx", function(d) { return x(d.rating); })
+        .attr("cy", function(d) { return y(d.averagePrice); })
+        .attr("r", 5);
+
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .tickValues(d3.range(1, 6, 1))
+        .orient("bottom");
+
+    chart.append("g")
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + size.height + ")")
+        .call(xAxis);
+
+    var yAxis = d3.svg.axis()
+        .scale(y)
+        .orient("left");
+
+    chart.append("g")
+        .attr("class", "axis")
+        .call(yAxis);
+
+    addXAxisLabel(chart, size, margin, "Rating");
+    addYAxisLabel(chart, size, margin, "Average Price");
+
+}());
+</script>
+
+<p>The above chart shows a quite strong positive correlation between price and ratings, with more costly apps tending to have a higher rating. But be warned that <a href="http://en.wikipedia.org/wiki/Correlation_does_not_imply_causation">correlation does not imply causation</a>, putting a high price tag on your app will not necessarily improve your ratings!</p>
+
+<p>Hopefully you have enjoyed this little exploration of the App Store metadata. If you have any other ideas for potential charts, analyses or correlations to explore, let me know and I'll try them out.  I've also been busy downloading even more App Store data ... more of this to follow shortly!</p> 
+
+<p>Regards, Colin E.</p>

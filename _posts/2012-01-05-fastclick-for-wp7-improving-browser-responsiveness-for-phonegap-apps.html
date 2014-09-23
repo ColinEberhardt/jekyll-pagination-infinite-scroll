@@ -1,0 +1,86 @@
+---
+id: 1907
+author: ceberhardt
+title: "FastClick for WP7 - Improving Browser Responsiveness for PhoneGap Apps"
+oldlink: "/blog/colin/2012/01/fastclick-for-wp7-improving-browser-responsiveness-for-phonegap-apps/"
+tags: 
+  - Windows Phone 7
+  - WebBrowser
+  - phone
+  - blog
+  - windowsphone
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>I recently released an update of the HTML5 / PhoneGap application I wrote a few months ago to the marketplace. This update fixed the location detection issue, where the marketplace certification process failed to detect that the application was using geolocation data via the browser (this issue <a href="https://issues.apache.org/jira/browse/CB-138">has been fixed in PhoneGap 1.2</a>), plus a few cosmetic improvements.</p>
+<p>This application still exhibits a few UI quirks that make it fairly obvious that this is not a native application, the first is the <a href="http://stackoverflow.com/questions/6378008/windows-phone-7-browser-turn-off-the-gray-shading-when-links-are-clicked">gray box that appears whenever a link is clicked</a>, the second is the overall responsiveness - there is a short delay between clicking on links / buttons and the application responding. It is this responsiveness that I would like to tackle in this blog post. This delay unfortunately gives the impression that your application is less responsive than it actually is!</p>
+<p><strong><em>So where does this delay come from?</em></strong></p>
+<p>Despite the rise in popularity of touch interfaces, much of the web is still designed for interaction with a mouse and keyboard, with the DOM exposing events for mouse-up, mouse-down and click user interactions. The Windows Phone 7 browser control captures touch interactions and translates these into the required mouse events, firing them on the DOM element being interacted with. However, the browser itself also needs to support gestures such as pan, pinch-zoom and double-tap zoom.</p>
+<p>If we consider for example the pinch-zoom feature, where the user places two fingers on the screen and moves them apart in order to zoom in. It is highly unlikely they will place both fingers on the screen simultaneously. If, when the first finger was placed, a mouse-down event was fired on the relevant DOM element, there would be no way to 'cancel' this event when the user's second finger made contact with the screen shortly afterwards. For this reason the WP7 mobile browser does not properly support mouse-down / mouse-up events. You will find that mousedown, mouseup then click are always fired immediately in that order regardless of how long you hold your finger on the screen for. Clearly the need to add gesture support to the browser interferes with the way in which native touch events are translated into JavaScript mouse events.</p>
+<p>Now consider the double-tap zoom feature, where the user taps twice in quick succession to zoom the web page by some fixed amount. If the DOM click event were fired on the first tap, this would cause a navigation to occur if an anchor element were tapped. This is certainly not the desired behaviour! Again, there is no way to 'cancel' an event once it is fired, so the only solution to this problem is, when the user first taps the screen, pause for a few hundred milliseconds to see if they tap a second time. Only after this pause is it safe to pass the interaction onto the DOM, firing a click event on the relevant DOM element.</p>
+<p><img src="{{ site.baseurl }}/archive/2012/01/the_fence.jpg" alt="" title="the_fence" width="300" height="244" class="aligncenter size-full wp-image-1910" /></p>
+<p><small>Stock image courtesy of <a href="http://www.sxc.hu/photo/313551">lovetheson</a></small></p>
+<p>The need to handle gestures in the native layer causes numerous issues for the browser event handling. Thankfully these issues are relatively minor for most websites, but if your aim is to create a HTML-based application with a native look and feel, these issues become quite major.</p>
+<p><strong>Improving responsiveness</strong></p>
+<p>The problem I want to tackle in this blog post is that of the click DOM event firing delay to support the double-tap gesture. With HTML5-based applications you will typically want to disable pinch zoom, double-tap zoom and (optionally) scrolling <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/suppressing-zoom-and-scroll-interactions-in-the-windows-phone-7-browser-control/" title="Suppressing Zoom and Scroll interactions in the Windows Phone 7 WebBrowser Control">as I described in a previous blog post</a>. As a result your application has no need for the double-tap and pinch gestures and we are safe to short-circuit this behaviour, immediately raising DOM click events when the user taps the screen.</p>
+<p>My solution follows a similar approach to the utility class I wrote for suppressing pan / zoom, where event handlers are added to the <code>Border </code>that sits within the <code>WebBrowser </code>control visual tree:</p>
+<pre>
+\-WebBrowser
+  \-Border
+    \-Border
+      \-PanZoomContainer
+        \-Grid
+          \-Border (*)
+            \-ContentPresenter
+              \-TileHost
+</pre>
+<p>In order to forward Tap gestures to the browser, we can add event handlers to the Border element, then use <code>InvokeScript</code> to pass this onto the DOM rendered within the <code>TileHost</code>.</p>
+<p>The JavaScript code to achieve this is very simple, the DOM exposes an <code>elementFromPoint</code> function which allows you to hit test the DOM. The IE9 DOM interface also exposes a non-standard <code>click</code> function which invokes any click event handlers, this will cause an anchor element to navigate. Putting it together, if you have an anchor element at <code>(x=100, y=100)</code>, you can cause it to navigate using the following simple code:</p>
+{% highlight javascript %}
+document.elementFromPoint(100, 100).click()
+{% endhighlight %}
+<p>Calling this JavaScript from our native C# code in response to Tap events is very easy. I have wrapped it up into a simple utility class:</p>
+{% highlight csharp %}
+/// <summary>
+/// Captures mouse left button up events, triggering an immediate
+/// click event on the clicked DOM element.
+/// </summary>
+public class BrowserFastClick
+{
+  private WebBrowser _browser;
+
+  private Border _border;
+
+  public BrowserFastClick(WebBrowser browser)
+  {
+    _browser = browser;
+    browser.Loaded += new RoutedEventHandler(Browser_Loaded);
+  }
+
+  private void Browser_Loaded(object sender, RoutedEventArgs e)
+  {
+    // locate the element used to capture mouse events
+    _border = _browser.Descendants<Border>().Last() as Border;
+    _border.Tap += Border_Tap;
+  }
+
+  private void Border_Tap(object sender, GestureEventArgs e)
+  {
+    //determine the click location
+    var pos = e.GetPosition(_border);
+
+    // forward to the browser
+    _browser.InvokeScript("eval",
+      string.Format("document.elementFromPoint({0},{1}).click()", pos.X, pos.Y));      
+  }
+}
+{% endhighlight %}
+<p>To use it within a PhoneGap application, simply create an instance as follows:</p>
+{% highlight csharp %}
+new BrowserFastClick(PGView.Browser);
+{% endhighlight %}
+<p>The net result is that your application becomes more responsive, with the browser immediately navigating links when they are first tapped.</p>
+<p>I have updated the HTML5 SandwichFlow application I blogged about a few weeks ago to use this FastClick code. You can download the complete example here: <a href='{{ site.baseurl }}/archive/2012/01/HTML5SandwichFlow.zip'>HTML5SandwichFlow.zip</a></p>
+<p>Regards, Colin E.</p>

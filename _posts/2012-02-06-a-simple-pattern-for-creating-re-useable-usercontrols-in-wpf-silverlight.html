@@ -1,0 +1,290 @@
+---
+id: 1958
+author: ceberhardt
+title: "A Simple Pattern for Creating Re-useable UserControls in WPF / Silverlight"
+oldlink: "/blog/colin/2012/02/a-simple-pattern-for-creating-re-useable-usercontrols-in-wpf-silverlight/"
+tags: 
+  - binding
+  - codeproject
+  - usercontrol
+  - codeproject
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p><em>This blog post provides step-by-step instructions for creating a user control, which exposes bindable properties, in WPF and Silverlight. The post covers dependency properties, and how to manage DataContext inheritance.</em></p>
+<p>When building user interfaces you will often find yourself repeating the same UI patterns across your application. After all, users like to be presented with a consistent interface, so re-use makes sense. The WPF and Silverlight frameworks provide custom controls and user controls as a mechanism for re-using blocks of UI elements. Custom controls are rather special, with the logic being de-coupled from the XAML in order to support templating. For most needs, the simpler user control is more appropriate.</p>
+<p>From participating in sites like StackOverflow I have noticed that whilst most people understand how to create a user control, which allows them to 'stamp out' the same XAML in multiple places, many struggle with how to make their user controls flexible by exposing properties that configure how it looks or behaves. This blog post will walk through a simple example, showing you how to create a user control, add dependency properties, wire them to the user control XAML and make a truly re-useable control.</p>
+<p>We'll start with a very simple example, an application that displays a simple form field which consists of a name and a value:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.MainPage"
+    ...>
+
+  <Grid x:Name="LayoutRoot" Background="White">
+    
+    <StackPanel Orientation="Horizontal"
+                VerticalAlignment="Top">
+      <TextBlock Text="Shoesize:"
+                 Width="100"
+                 VerticalAlignment="Center"/>   
+      <TextBox Text="{Binding Path=Shoesize}"
+               Width="100"/>
+    </StackPanel>
+  </Grid>
+</UserControl>
+{% endhighlight %}
+<p>This UI is bound to a simple model object that implements <code>INotifyPropertyChanged</code> (not shown for the sake of brevity):</p>
+{% highlight csharp %}
+public class ModelObject : INotifyPropertyChanged
+{
+  public int Shoesize {...}
+
+  public double Height {...}
+}
+{% endhighlight %}
+<p>The constructor instantiates the model object and sets it as the DataContext:</p>
+{% highlight csharp %}
+public MainPage()
+{
+  InitializeComponent();
+
+  var model = new ModelObject()
+  {
+    Shoesize = 12,
+    Height = 34.5
+  };
+
+  this.DataContext = model;
+}
+{% endhighlight %}
+<p>This produces the expected behaviour, a label and a text field that allows you to edit the Shoesize property:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/Userinterface.png" alt="" title="Userinterface" width="306" height="39" class="aligncenter size-full wp-image-1964" /></p>
+<p>Let's say we want to allow the user to edit the Height property as well. We could cut and paste our current XAML, but this will only cause maintenance issues in future. Instead, the preferred approach would be to move the XAML into a user control, allowing it to be re-used.</p>
+<p>The first step is to create a new user control, <code>FieldUserControl</code>, and move our XAML into there:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.FieldUserControl"
+    ...>
+  <StackPanel Orientation="Horizontal">
+    <TextBlock Text="Shoesize:"
+               Width="100"
+               VerticalAlignment="Center"/>
+    <TextBox Text="{Binding Path=Shoesize}"
+             Width="100"/>
+  </StackPanel>
+</UserControl>
+{% endhighlight %}
+<p>We can now replace the XAML we have moved with an instance of this user control:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.MainPage"
+    xmlns:local="clr-namespace:UserControlExample"
+    ...>
+  <Grid x:Name="LayoutRoot">
+    <local:FieldUserControl VerticalAlignment="Top"/>
+  </Grid>
+</UserControl>
+{% endhighlight %}
+<p>Compiling and running this code proves that this still works; we can see the model property and edit it:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/Userinterface.png" alt="" title="Userinterface" width="306" height="39" class="aligncenter size-full wp-image-1964" /></p>
+<p>For trivial user controls this is all we need to do. However, in most cases, like this one, you will find that there are some elements of your user control that you wish to configure. In order to use this control for editing the <code>Height </code>property we need to make the label configurable. We do this by adding a Label property to our <code>FieldUserControl</code>.</p>
+<p>This is where things get a bit tricky! Ideally this property should support binding, just like any other property of the framework UI controls. The WPF / Silverlight binding framework revolves around the concept of dependency properties, you can make any property the source of a binding, but the target must be a dependency property (DP). So let's go ahead and add a <code>Label</code> dependency property to our user control:</p>
+{% highlight csharp %}
+public partial class FieldUserControl : UserControl
+{
+  #region Label DP
+
+  /// <summary>
+  /// Gets or sets the Label which is displayed next to the field
+  /// </summary>
+  public String Label
+  {
+    get { return (String)GetValue(LabelProperty); }
+    set { SetValue(LabelProperty, value); }
+  }
+
+  /// <summary>
+  /// Identified the Label dependency property
+  /// </summary>
+  public static readonly DependencyProperty LabelProperty =
+      DependencyProperty.Register("Label", typeof(string),
+        typeof(FieldUserControl), new PropertyMetadata(""));
+
+  #endregion
+
+  public FieldUserControl()
+  {
+    InitializeComponent();
+  }
+}
+{% endhighlight %}
+<p>A lot of code isn't it? It's all boiler-plate stuff, you just have to live with it (I'd recommend either using code-snippets, or <a href="http://www.scottlogic.co.uk/blog/colin/2009/08/declarative-dependency-property-definition-with-t4-dte/">code generation for DPs</a>) </p>
+<p>We can now go ahead and bind the label text to this property:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.FieldUserControl"
+    ...>
+  <StackPanel Orientation="Horizontal" x:Name="LayoutRoot">
+    <TextBlock Text="{Binding Path=Label}"
+               Width="100"
+               VerticalAlignment="Center"/>
+    <TextBox Text="{Binding Path=Shoesize}"
+             Width="100"/>
+  </StackPanel>
+</UserControl>
+{% endhighlight %}
+<p>However, if you compile and run the above code, you'll find that it doesn't work. The model property value is still displayed but the label is not.</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/NoLabel.png" alt="" title="NoLabel" width="281" height="30" class="aligncenter size-full wp-image-1962" /></p>
+<p>So why is this?</p>
+<p>Bindings have both a source and a target; where the binding framework is responsible for handling change notifications from the source and (optionally) the target, keeping the two synchronized. The bindings in our <code>FieldUserControl </code>have a value for the Path, which specifies the target, but what is the source?</p>
+<p>If you create a binding in XAML but do not specify the source (which is probably the most common use case), the source will be set to the <code>DataContext </code>of the control the binding has been specified on. The DataContext is inherited down the visual tree, from each control's parent to child. The <code>DataContext </code>is most often set to a view model or business / model object, as in our case where the top level control, the <code>MainPage</code>, has its <code>DataContext</code> set to an instance of <code>ModelObject</code>.</p>
+<p>As a result, the <code>DataContext </code>for <code>FieldUserControl </code>and all of its child elements is also <code>ModelObject</code>. This is why our Value binding is failing. Value is a property of <code>FieldUserControl</code>, not our model object.</p>
+<p>So how do we go about fixing this? Most people's first reaction is to set the <code>DataContext </code>of the user control to itself (I distinctly recall doing this myself the first time I encountered this problem!). We'll find out later that this is a mistake - but for now let's just go with it!</p>
+{% highlight csharp %}
+public FieldUserControl()
+{
+  InitializeComponent();
+
+  this.DataContext = this;
+}
+{% endhighlight %}
+<p>With the <code>DataContext</code> of the control now set to itself, our label is now working:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/NoValue.png" alt="" title="NoValue" width="293" height="34" class="aligncenter size-full wp-image-1963" /></p>
+<p>However, now our value has disappeared! Again, this is a <code>DataContext </code>issue, the binding in our user control is on a <code>Shoesize </code>property, whilst the <code>DataContext</code> is now the <code>FieldUserControl </code>instance.</p>
+<p>This is not such a big problem, we were going to have to change that anyway, a hard-coded binding to the <code>Shoesize</code> property means that we cannot re-use this control to edit other properties of the model object.</p>
+<p>So we add another dependency property to our user control. We already have the <code>Label </code>dependency property, we now add a <code>Value</code> property:</p>
+{% highlight csharp %}
+public partial class FieldUserControl : UserControl
+{
+  #region Label DP
+
+  ...
+
+  #endregion
+
+  #region Value DP
+
+  /// <summary>
+  /// Gets or sets the Value which is being displayed
+  /// </summary>
+  public object Value
+  {
+    get { return (object)GetValue(ValueProperty); }
+    set { SetValue(ValueProperty, value); }
+  }
+
+  /// <summary>
+  /// Identified the Label dependency property
+  /// </summary>
+  public static readonly DependencyProperty ValueProperty =
+      DependencyProperty.Register("Value", typeof(object),
+        typeof(FieldUserControl), new PropertyMetadata(null));
+
+  #endregion
+
+  public FieldUserControl()
+  {
+    InitializeComponent();
+
+    this.DataContext = this;
+  }
+}
+{% endhighlight %}
+<p>This value property is bound to the user control UI as follows:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.FieldUserControl"
+    ...>
+  <StackPanel Orientation="Horizontal" x:Name="LayoutRoot">
+    <TextBlock Text="{Binding Path=Label}"
+               Width="100"
+               VerticalAlignment="Center"/>
+    <TextBox Text="{Binding Path=Value}"
+             Width="100"/>
+  </StackPanel>
+</UserControl>
+{% endhighlight %}
+<p>The idea here is that the exposed <code>Value</code> property 'relays' the value of the binding in our<code> MainPage.xaml</code>, which now has a binding which tells us which model object property is being displayed in our user control:</p>
+{% highlight xml %}
+<Grid>
+  <StackPanel Orientation="Vertical"
+              HorizontalAlignment="Left"
+              Margin="10">
+    <local:FieldUserControl VerticalAlignment="Top"
+                            Label="Height:"
+                            Value="{Binding Height}"/>
+    <local:FieldUserControl VerticalAlignment="Top"
+                            Label="Shoesize:"
+                            Value="{Binding Height}"/>
+  </StackPanel>
+</Grid>
+{% endhighlight %}
+<p>If you compile and run this code you will find that ... it doesn't work!</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/NoValue.png" alt="" title="NoValue" width="293" height="34" class="aligncenter size-full wp-image-1963" /></p>
+<p>Remember earlier when I said that setting the user control's <code>DataContext</code> to itself is a mistake? We have just found out why!</p>
+<p>The source of a binding is the <code>DataContext </code>of the control it is defined upon. In our <code>MainPage.xaml</code> we have attempted to bind the <code>Value </code>property of the <code>FieldUserControl </code>to the <code>Height </code>property on our model object. However, the code within the <code>FieldUserControl</code> constructor means that it no longer inherits its parent's <code>DataContext </code>(i.e. our model object), so this binding does not work.</p>
+<p>This problem can be fixed by setting the <code>DataContext </code>of the <code>FieldUserControl</code>'s root element to itself.</p>
+<p>Note that the user control has a StackPanel as its root element and that this is named <code>LayoutRoot</code>:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.FieldUserControl"
+    ...>
+  <StackPanel Orientation="Horizontal"
+              x:Name="LayoutRoot">
+    ...
+  </StackPanel>
+</UserControl>
+{% endhighlight %}
+<p>We change the constructor so that it sets the <code>LayoutRoot </code><code>DataContext </code>to itself.</p>
+{% highlight csharp %}
+public FieldUserControl()
+{
+  InitializeComponent();
+ 
+  //this.DataContext = this;
+  LayoutRoot.DataContext = this;
+}
+{% endhighlight %}
+<p>This means that the <code>FieldUserControl </code>still inherits its parent's <code>DataContext</code>, so bindings to our model object will work. Furthermore, the <code>FieldUserControl </code>and its children all have the <code>FieldUserControl </code>as their <code>DataContext</code>, so their bindings work also:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/ItWorks.png" alt="" title="ItWorks" width="269" height="36" class="aligncenter size-full wp-image-1961" /></p>
+<p>Finally, we're done!</p>
+<p>If the technique of binding the layout root of the user control to itself is a bit confusing - the following diagram, which shows the visual tree of our simple application, might help:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/DataContext.png" alt="" title="DataContext" width="550" height="377" class="aligncenter size-full wp-image-1959" /></p>
+<p>Again, notice that the <code>DataContext </code>of <code>FieldUserControl </code>is inherited from its parent. This means that any bindings we add to <code>FieldUserControl</code> have the <code>ModelObect </code>as their source.</p>
+<p>We can now create multiple instances of <code>FieldUserControl </code>to edit different properties:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.MainPage"
+    xmlns:local="clr-namespace:UserControlExample"
+    ...>
+
+  <Grid>
+    <StackPanel Orientation="Vertical"
+                HorizontalAlignment="Left"
+                Margin="10">
+      <local:FieldUserControl VerticalAlignment="Top"
+                              Label="Height:"
+                              Value="{Binding Height}"/>
+      <local:FieldUserControl VerticalAlignment="Top"
+                              Label="Shoesize:"
+                              Value="{Binding Shoesize}"/>
+    </StackPanel>
+  </Grid>
+</UserControl>
+{% endhighlight %}
+<p>With an update of the <code>FieldUserControl</code> styling, the result looks like this:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/final.png" alt="" title="final" width="232" height="77" class="aligncenter size-full wp-image-1960" /></p>
+<p>We now have a truly re-useable user control!</p>
+<p>As an aside, for bonus points, you can bind the layout root <code>DataContext</code> without any code-behind by using an <code>ElementName</code> binding as follows:</p>
+{% highlight xml %}
+<UserControl x:Class="UserControlExample.FieldUserControl"
+             x:Name="parent" ...>
+  <StackPanel Orientation="Horizontal"
+              DataContext="{Binding ElementName=parent}">
+    <TextBlock Text="{Binding Path=Label}"
+               Width="100"
+               VerticalAlignment="Center"/>
+    <TextBox Text="{Binding Path=Shoesize}"
+             Width="100"/>
+  </StackPanel>
+</UserControl>
+{% endhighlight %}
+<p>Or, in WPF you could event use a<code> RelativeSource FindAncestor</code> binding, with <code>AncestorType </code>set to the type of <code>FieldUserControl </code>(but that would just be showing off!).</p>
+<p>Hopefully this blog post will help anyone who is confused about how to create user controls which expose properties in WPF or Silverlight.</p>
+<p>You can download the sourcecode for the example: <a href='{{ site.baseurl }}/archive/2012/02/UserControlExample.zip'>UserControlExample.zip</a></p>
+<p>Regards, Colin E.</p>

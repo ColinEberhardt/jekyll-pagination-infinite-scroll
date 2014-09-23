@@ -1,0 +1,294 @@
+---
+id: 2209
+author: ceberhardt
+title: "A gesture-driven Windows Phone to-do application Part Two - drag re-ordering"
+oldlink: "/blog/colin/2012/06/a-gesture-driven-windows-phone-todo-application-part-two-drag-re-ordering/"
+tags: 
+  - WP7
+  - gestures
+  - blog
+  - windowsphone
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p><em>A couple of weeks ago <a href="http://www.scottlogic.co.uk/blog/colin/2012/06/a-gesture-driven-windows-phone-to-do-application/" title="A gesture-driven Windows Phone to-do application">I blogged about a todo list application</a> which uses gestures to achieve its basic functions, a left swipe deletes an item, while a right-swipe marks it as complete. In this blog post I am adding re-ordering which is initiated via a tap-and-hold gesture and performed via a drag.</em></p>
+<p>As mentioned previously, this application is heavily inspired by the <a href="http://www.realmacsoftware.com/clear/">iPhone application Clear</a>, who I give full credit for coming up with such an innovative user-interface design. This blog post is for fun an education, you are strictly prohibited from using this as the basis of a 'Clear' clone for WP7.</p>
+<p>The video below shows the application so far, with the new re-order functionality:</p>
+<p><iframe width="480" height="360" src="http://www.youtube.com/embed/Hd2szlUmwyA" frameborder="0" allowfullscreen></iframe></p>
+<h3>Initiating a Drag</h3>
+<p>In the <a href="http://www.scottlogic.co.uk/blog/colin/2012/06/a-gesture-driven-windows-phone-to-do-application/" title="A gesture-driven Windows Phone to-do application">previous blog post</a> we saw how the Toolkit <code>GestureListener </code>can be used to convert the low-level manipulation events into high level gestures. In order to initiate an item drag we could use the Hold event that the <code>GestureListener </code>exposes. The Hold event is fired when the user taps and holds the location of their finger for a few seconds. When I published my previous blogpost one of my readers <a href="http://www.scottlogic.co.uk/blog/colin/2012/06/a-gesture-driven-windows-phone-to-do-application/#comment-104611">Simon (Darkside) Jackson kindly pointed out</a> that some of the gesture events are now supported by <code>FrameworkElement </code>directly, <code>Hold </code>is one such event. For this reason I'll use <code>FrameworkElement.Hold</code>, the equivalent event on <code>GestureListener </code>should be considered deprecated. </p>
+<p>The easiest way to allow the user to 'pick up' and drag the item is to clone it using a <code>WriteableBitmap</code>, hiding the original. This technique allows us to place the item at a higher Z-index than the list which it comes from, so that it will always be top-most as it is moved up and down the list.</p>
+<p>We'll add the element that is used to render the dragged item to the XAML:</p>
+{% highlight xml %}
+<Grid>
+  <ItemsControl ItemsSource="{Binding}" x:Name="todoList">
+    ... markup from previous blog post
+  </ItemsControl>
+
+  <Grid x:Name="dragImageContainer"
+        VerticalAlignment="Top"
+        Visibility="Collapsed">
+    <!-- the image that displays the dragged item -->
+    <Image x:Name="dragImage"
+          VerticalAlignment="Top">
+    </Image>
+        
+    <!-- lower drop shadow -->
+    <Rectangle Height="10"
+                VerticalAlignment="Bottom">
+      <Rectangle.Fill>
+        <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
+          <GradientStop Color="#AA000000"/>
+          <GradientStop Color="#00000000" Offset="1"/>
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+      <Rectangle.RenderTransform>
+        <TranslateTransform Y="10"/>
+      </Rectangle.RenderTransform>
+    </Rectangle>
+        
+    <!-- upper drop shadow -->
+    <Rectangle Height="10"
+               VerticalAlignment="Top">
+      <Rectangle.Fill>
+        <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
+          <GradientStop Color="#00000000"/>
+          <GradientStop Color="#AA000000" Offset="1"/>
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+      <Rectangle.RenderTransform>
+        <TranslateTransform Y="-10"/>
+      </Rectangle.RenderTransform>
+    </Rectangle>
+  </Grid>
+</Grid>
+{% endhighlight %}
+<p>The markup contains an image, and a couple of <code>Rectangle </code>elements, each of which is filled with a subtle opacity gradient and offset in order to give the impression of a drop shadow. The Source of the image is set in the Hold event handler as shown:</p>
+{% highlight csharp %}
+private void GestureListener_Hold(object sender, Microsoft.Phone.Controls.GestureEventArgs e)
+{
+  _dragReOrder = true;
+
+  // copy the dragged item to our 'dragImage' 
+  FrameworkElement draggedItem = sender as FrameworkElement;
+  var bitmap = new WriteableBitmap(draggedItem, null);
+  dragImage.Source = bitmap;
+  dragImageContainer.Visibility = Visibility.Visible;
+  dragImageContainer.Opacity = 1.0;\
+  dragImageContainer.SetVerticalOffset(draggedItem.GetRelativePosition(todoList).Y);
+
+  // hide the real item
+  draggedItem.Opacity = 0.0;
+
+  // fade out the list
+  todoList.Animate(1.0, 0.7, FrameworkElement.OpacityProperty, 300, 0);
+      
+  _initialDragIndex = _todoItems.IndexOf(((ToDoItem)draggedItem.DataContext));
+}
+{% endhighlight %}
+<p>The code above also hides the real object and offsets our 'fake' vertically so that it occupies the same position as the original. The list is also faded slightly to give a visual indication that the dragged item is now above the rest of the list:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/06/holdToDrag.jpg" alt="" title="holdToDrag" width="450" height="382" class="aligncenter size-full wp-image-2210" /></p>
+<h3>Dragging the item</h3>
+<p>In order to allow the user to support dragging of the item we also need to handle <code>ManipulationDelta </code>on the <code>Border </code>element, as shown below:</p>
+{% highlight xml %}
+<ItemsControl.ItemTemplate>
+  <DataTemplate>
+    <Border Background="{Binding Path=Color, Converter={StaticResource ColorToBrushConverter}}"
+            ManipulationDelta="Border_ManipulationDelta"
+            ManipulationCompleted="Border_ManipulationCompleted"
+            Hold="Border_Hold"
+            Canvas.ZIndex="0">
+      <!-- gestures that were added in the last blog post to support delete / complete -->
+      <toolkit:GestureService.GestureListener>
+        <toolkit:GestureListener
+                  DragStarted="GestureListener_DragStarted"
+                  DragDelta="GestureListener_DragDelta"
+                  DragCompleted="GestureListener_DragCompleted"
+                  GestureCompleted="GestureListener_GestureCompleted"
+                  Flick="GestureListener_Flick"/>
+      </toolkit:GestureService.GestureListener>
+              
+      <Grid>
+        <!-- the todo item XAML from the previous blog post -->        
+      </Grid>
+    </Border>
+  </DataTemplate>
+</ItemsControl.ItemTemplate>
+{% endhighlight %}
+<p>So why am I handling these events on the <code>Border </code>rather than re-using the <code>DragDelta </code>/ <code>GestureComplete </code>on the <code>GestureListener</code>? There are a couple of reasons:</p>
+<ol><li>The <code>GestureListener </code>'drag' has a tolerance (as discussed in the previous blog post). The user has to move their finger beyond a certain distance before a drag is started. In the current context we want a drag to occur as soon as the <code>Hold</code> event fires.</li>
+<li>When handling the element 'drag' we need to suppress the event by setting <code>e.Handled=true</code>, otherwise a drag will bubble up to the <code>ScrollViewer</code> that hosts our elements causing it to scroll. I found (through trial and error) that the<code> GestureListener.DragDelta.Handled</code> property doesn't appear to have any effect.</li>
+</ol>
+<p>The handler for the drag event is pretty simple, moving the copy of our item by the required distance:</p>
+{% highlight csharp %}
+private void Border_ManipulationDelta(object sender, ManipulationDeltaEventArgs e)
+{
+  Debug.WriteLine("ManipulationDelta");
+
+  if (!_dragReOrder)
+    return;
+
+  // set the event to handled in order to avoid scrolling the ScrollViewer
+  e.Handled = true;
+
+  // move our 'drag image'.
+  dragImageContainer.SetVerticalOffset(dragImageContainer.GetVerticalOffset().Value + e.DeltaManipulation.Translation.Y);
+
+  ShuffleItemsOnDrag();
+}
+{% endhighlight %}
+<h3>Offsetting the items underneath</h3>
+<p>The <code>ShuffleItemsOnDrag </code>method is where the fun starts, we'll get to that shortly. First we'll take a look at a simple utility method that is used to determine the index that the item being dragged would occupy if it were dropped at the present location. This is achieved by a simple measurement:</p>
+{% highlight csharp %}
+// Determines the index that the dragged item would occupy when dropped
+private int GetDragIndex()
+{
+  double dragLocation = dragImageContainer.GetRelativePosition(todoList).Y +
+                          VerticalScrollViewer.VerticalOffset +
+                          dragImage.ActualHeight / 2;
+  int dragIndex = (int)(dragLocation / dragImage.ActualHeight);
+  return dragIndex;
+}
+
+private ScrollViewer _scrollViewer;
+    
+
+// gets the scrollviewer from the ItemsControl template
+private ScrollViewer VerticalScrollViewer
+{
+  get
+  {
+    if (_scrollViewer == null)
+    {
+      _scrollViewer = todoList.Descendants<ScrollViewer>()
+                              .Cast<ScrollViewer>()
+                              .Single();
+    }
+    return _scrollViewer;
+  }
+}
+{% endhighlight %}
+<p>The above code needs to take the current scroll location into consideration, which is why the ScrollViewer property above uses <a href="http://www.scottlogic.co.uk/blog/colin/2010/03/linq-to-visual-tree/" title="Linq to Visual Tree">Linq-to-VisualTree</a> to find the <code>ScrollViewer </code>that the <code>ItemsControl </code>generates to hosts our elements.</p>
+<p><code>ShuffleItemsOnDrag </code>is where the fun begins, we want to create an effect where the dragged item 'pushes' the other items out of the way as it hovers over them, giving the impression that the list is re-ordering as we drag.</p>
+<p>The method below iterates over all of the items in the list to determine whether they need to be offset. An item needs to be offset if it is between the current dragged item index and the items original location.</p>
+{% highlight csharp %}
+private void ShuffleItemsOnDrag()
+{
+  // find its current index
+  int dragIndex = GetDragIndex();
+
+  // iterate over the items in the list and offset as required
+  double offset = dragImage.ActualHeight;
+  for (int i = 0; i < _todoItems.Count; i++)
+  {
+    FrameworkElement item = todoList.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+
+    // determine which direction to offset this item by
+    if (i <= dragIndex && i > _initialDragIndex)
+    {
+      OffsetItem(-offset, item);
+    }
+    else if (i >= dragIndex && i < _initialDragIndex)
+    {
+      OffsetItem(offset, item);
+    }
+    else
+    {
+      OffsetItem(0, item);
+    }
+  }
+}
+{% endhighlight %}
+<p>The <code>OffsetItem </code>method performs the actual offset by animating the Y position of each item. The target location is stored in the elements <code>Tag</code> property so that we don't repeatedly fire the same animation on an element.</p>
+{% highlight csharp %}
+private void OffsetItem(double offset, FrameworkElement item)
+{
+  double targetLocation = item.Tag != null ? (double)item.Tag : 0;
+  if (targetLocation != offset)
+  {
+    var trans = item.GetVerticalOffset().Transform;
+    trans.Animate(null, offset, TranslateTransform.YProperty, 500, 0);
+    item.Tag = offset;
+    _moveSound.Play();
+  }
+}
+{% endhighlight %}
+<p><img src="{{ site.baseurl }}/archive/2012/06/drag.jpg" alt="" title="drag" width="300" height="545" class="aligncenter size-full wp-image-2211" /></p>
+<h3>Completing the drag</h3>
+<p>When the user stops dragging the item, the <code>ManipulationCompleted</code> event is fired. Here we perform a number of tasks:</p>
+<ol><li>Fade the list back to full opacity</li>
+<li>Animate the dragged item so that it 'snaps' into location</li>
+<li>When the above is complete, we need to re-order the underlying collection of model items, then re-populate the <code>ObservableCollection </code>exposed to the view. This causes all the items to be re-rendered, removing all of the <code>TranslateTransforms </code>that have been applied.</li>
+<li>Finally, remove the image which is our copy of the dragged item.</li>
+</ol>
+<p>This sounds like a lot of work, but our <code>Animate</code> utility method makes it quite simple:</p>
+{% highlight csharp %}
+private void Border_ManipulationCompleted(object sender, ManipulationCompletedEventArgs e)
+{
+  if (!_dragReOrder)
+    return;
+
+  _dragReOrder = false;
+  _autoScrollTimer.Stop();
+
+  int dragIndex = GetDragIndex();
+      
+  // fade in the list
+  todoList.Animate(null, 1.0, FrameworkElement.OpacityProperty, 200, 0);
+
+  // animated the dragged item into location
+  double targetLocation = dragIndex * dragImage.ActualHeight - VerticalScrollViewer.VerticalOffset;
+  var trans = dragImageContainer.GetVerticalOffset().Transform;
+  trans.Animate(null, targetLocation, TranslateTransform.YProperty, 200, 0, null,
+    () =>
+    {
+      // clone the list and move the dragged item
+      var items = _todoItems.ToList();
+      var draggedItem = items[_initialDragIndex];
+      items.Remove(draggedItem);
+      items.Insert(dragIndex, draggedItem);
+
+      // re-populate our ObservableCollection
+      _todoItems.Clear();
+      _todoItems.AddRange(items);
+      UpdateToDoColors();
+
+      // fade out the dragged image and collapse on completion
+      dragImageContainer.Animate(null, 0.0, FrameworkElement.OpacityProperty, 1000, 0, null, ()
+        => dragImageContainer.Visibility = Visibility.Collapsed);
+    });
+
+}
+{% endhighlight %}
+<h3>Scrolling the list</h3>
+<p>The current implementation only allows the user to drag the item within the bounds of the current screen. What if the list is larger than the screen and the users want to drag right from the bottom to the top?</p>
+<p>A common solution to this problem is to auto-scroll the list if the item is dragged near to the top. The following method is invoked periodically by a timer to see whether the item has been dragged within the top or bottom 'scroll zones'. The velocity of the scroll is proportional to just how far within these zones the item has been dragged. Scrolling is simply a matter of setting the scroll location on the <code>ScrollViewer </code>we located earlier:</p>
+{% highlight csharp %}
+// checks the current location of the item being dragged, and scrolls if it is
+// close to the top or the bottom
+private void AutoScrollList()
+{
+  // where is the dragged item relative to the list bounds?
+  double draglocation = dragImage.GetRelativePosition(todoList).Y + dragImage.ActualHeight / 2;
+
+  if (draglocation < AutoScrollHitRegionSize)
+  {
+    // if close to the top, scroll up
+    double velocity = (AutoScrollHitRegionSize - draglocation);
+    VerticalScrollViewer.ScrollToVerticalOffset(VerticalScrollViewer.VerticalOffset - velocity);
+  }
+  else if (draglocation > todoList.ActualHeight - AutoScrollHitRegionSize)
+  {
+    // if close to the bottom, scroll down
+    double velocity = (AutoScrollHitRegionSize - (todoList.ActualHeight - draglocation));
+    VerticalScrollViewer.ScrollToVerticalOffset(VerticalScrollViewer.VerticalOffset + velocity);
+  }
+}
+{% endhighlight %}
+<p>You can see the scroll zones illustrated below:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/06/scrollZones.jpg" alt="" title="scrollZones" width="300" height="545" class="aligncenter size-full wp-image-2212" /></p>
+<p>And finally, we are all done! With our todo application you can use flick and drag gestures to mark items as complete or delete them, and now use hold and drag to re-order. I think it's about time I made it so that you can add or edit items. We'll get to that next time!</p>
+<p>You can download the sourcecode here: <a href='{{ site.baseurl }}/archive/2012/06/ClearStyle1.zip'>ClearStyle.zip</a></p>
+<p>Regards, Colin E.</p>

@@ -1,0 +1,235 @@
+---
+id: 1925
+author: ceberhardt
+title: "Windows Phone 7 - Browsing your Photos via Bing Maps"
+oldlink: "/blog/colin/2012/01/windows-phone-7-browsing-your-photos-via-bing-maps/"
+tags: 
+  - codeproject
+  - WP7
+  - bing maps
+  - EXIF
+  - codeproject
+  - windowsphone
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>The Windows Phone 7 camera gives you the option to record the location where a picture was taken (under Settings => applications => pictures+camera). With this feature turned on, each application has their latitude, longitude and altitude stored as part of the standard <a href="http://en.wikipedia.org/wiki/Exchangeable_image_file_format">EXIF data</a>. I thought it would be fun to combine the previous blog post I wrote on <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/pushpin-clustering-with-the-windows-phone-7-bing-map-control/" title="Pushpin Clustering with the Windows Phone 7 Bing Map control">pushpin clustering</a> with the photos on my camera, to allow me to explore them via a Bing Maps control. With not much more than 100 lines of code I came up with an application which I think is a lot of fun to use. </p>
+<table>
+<tr>
+<td width="300" ><img style="margin:5px" src="{{ site.baseurl }}/archive/2012/01/screenshot.jpg" alt="" title="screenshot4" width="300" height="188" class="aligncenter size-full wp-image-1931" /></td>
+<td width="300"><img style="margin:5px" src="{{ site.baseurl }}/archive/2012/01/screenshot2.jpg" alt="" title="screenshot4" width="300" height="188" class="aligncenter size-full wp-image-1931" /></td>
+</tr>
+<tr>
+<td><p  style="margin:5px">Here are all the photos on my phone, note the way the pushpins are clustered.</p>
+</td>
+<td>
+<p  style="margin:5px">Here are a few pictures I took in New York, of the <a href="http://en.wikipedia.org/wiki/One_World_Trade_Center">One World Trade Centre</a> and the <a href="http://en.wikipedia.org/wiki/New_York_Stock_Exchange">Stock Exchange</a>.</p>
+</td>
+</tr>
+<tr>
+<td><img style="margin:5px" src="{{ site.baseurl }}/archive/2012/01/screenshot3.jpg" alt="" title="screenshot4" width="300" height="188" class="aligncenter size-full wp-image-1931" /></td>
+<td><img style="margin:5px" src="{{ site.baseurl }}/archive/2012/01/screenshot4.jpg" alt="" title="screenshot4" width="300" height="188" class="aligncenter size-full wp-image-1931" /></td>
+</tr>
+<tr>
+<td>
+<p  style="margin:5px">Here are some pictures around Europe, including one of <a href="https://twitter.com/GergelyOrosz">Gergely Orosz</a> waiting for his turn in the Edinburgh Marathon Relay.</p>
+</td>
+<td>
+<p  style="margin:5px">And finally, some pictures I took whilst running around <a href="http://en.wikipedia.org/wiki/Kielder_Water">Kielder Water</a> during Kielder marathon.</p>
+</td>
+</tr>
+</table>
+<h2>Accessing the EXIF data</h2>
+<p>You can access the photos on a WP7 device via the XNA <a href="http://msdn.microsoft.com/en-us/library/microsoft.xna.framework.media.medialibrary.aspx">MediaLibrary</a> class. The interface that this class provides gives you access to <a href="http://msdn.microsoft.com/en-us/library/microsoft.xna.framework.media.picture.aspx">Picture</a> instances which have properties that allow you to access the width / height and a few other basic attributes. They also have methods that return streams which can be used to read the thumbnail and image data, however, they do not expose the picture location. This is 'hidden' within the EXIF data.</p>
+<p>Fortunately there is a C# implementation of an <a href="http://www.codeproject.com/KB/silverlight/Exif_Data.aspx">EXIF decoder available on codeproject</a>, which, <a href="http://timheuer.com/blog/archive/2010/09/23/working-with-pictures-in-camera-tasks-in-windows-phone-7-orientation-rotation.aspx">with a few tweaks by Tim Heuer</a> works just fine within Silverlight for Windows Phone 7.</p>
+<p>With this library, accessing the EXIF data is a one-liner:</p>
+{% highlight csharp %}
+JpegInfo info = ExifReader.ReadJpeg(picture.GetImage(), picture.Name);
+{% endhighlight %}
+<p>The JpegInfo class exposes the raw EXIF geolocation data, which is detailed in the <a href="http://www.exif.org/Exif2-2.PDF">EXIF specification</a> as being expressed as separate components of degrees, minutes and seconds together with a reference direction (North / South, East / West). We can convert from the <a href="http://en.wikipedia.org/wiki/Sexagesimal">sexagesimal</a> numeric system used in EXIF, to the decimal system as follows:</p>
+{% highlight csharp %}
+private static double DecodeLatitude(JpegInfo info)
+{
+  double degrees = ToDegrees(info.GpsLatitude);
+  return info.GpsLatitudeRef == ExifGpsLatitudeRef.North ? degrees : -degrees;
+}
+
+private static double DecodeLongitude(JpegInfo info)
+{
+  double degrees = ToDegrees(info.GpsLongitude);
+  return info.GpsLongitudeRef == ExifGpsLongitudeRef.East ? degrees : -degrees;
+}
+
+public static double ToDegrees(double[] data)
+{
+  return data[0] + data[1] / 60.0 + data[2] / (60.0 * 60.0);
+}
+{% endhighlight %}
+<h2>Analysing the images</h2>
+<p>When the application starts a <code>BackgroundWorker</code> is used to read the EXIF data for all of the pictures in the phone's media library, with those that have geolocation data available being stored in a separate list:</p>
+{% highlight csharp %}
+BackgroundWorker bw = new BackgroundWorker();
+bw.WorkerReportsProgress = true;
+
+// analyse the pictures that reside in the Media Library in a background thread
+bw.DoWork += (s, e) =>
+{
+  var ml = new MediaLibrary();
+
+  using (var pics = ml.Pictures)
+  {
+    int total = pics.Count;
+    int index = 0;
+    foreach (Picture picture in pics)
+    {
+      // read the EXIF data for this image
+      JpegInfo info = ExifReader.ReadJpeg(picture.GetImage(), picture.Name);
+
+      // check if we have co-ordinates
+      if (info.GpsLatitude.First() != 0.0)
+      {
+        _images.Add(new LocatedImage()
+        {
+          Picture = picture,
+          Lat = DecodeLatitude(info),
+          Long = DecodeLongitude(info)
+        });
+      }
+
+      // report progress back to the UI thread
+      string progress = string.Format("{0} / {1}", index, total);
+      bw.ReportProgress((index * 100 / total), progress);
+
+      index++;
+    }
+  }
+};
+
+// update progress on the UI thread
+bw.ProgressChanged += (s, e) =>
+  {
+    string title = (string)e.UserState;
+    ApplicationTitle.Text = title;
+  };
+
+bw.RunWorkerAsync();
+
+// when analysis is complete, add the pushpins
+bw.RunWorkerCompleted += (s, e) =>
+  {
+    ApplicationTitle.Text = "";
+    AddPushpins();
+  };
+{% endhighlight %}
+<p>When the pictures have all been analysed, a pushpin is created for each image which is then added to the <a href="http://www.scottlogic.co.uk/blog/colin/2011/11/pushpin-clustering-with-the-windows-phone-7-bing-map-control/" title="Pushpin Clustering with the Windows Phone 7 Bing Map control">clusterer described in my previous blog post</a>.</p>
+{% highlight csharp %}
+private void AddPushpins()
+{
+  List<Pushpin> pushPins = new List<Pushpin>();
+
+  // create a pushpin for each picture
+  foreach (var image in _images)
+  {
+    Location location = new Location()
+    {
+      Latitude = image.Lat,
+      Longitude = image.Long
+    };
+
+    Pushpin myPushpin = new Pushpin()
+    {
+      Location = location,
+      DataContext = image,
+      Content = image,
+      ContentTemplate = this.Resources["MarkerTemplate"] as DataTemplate
+    };
+
+    pushPins.Add(myPushpin);
+  }
+
+  // add them to the map via a clusterer
+  var clusterer = new PushpinClusterer(map, pushPins, this.Resources["ClusterTemplate"] as DataTemplate);
+}
+{% endhighlight %}
+<p>The template used for the pushpins simply renders the image thumbnail:</p>
+{% highlight xml %}
+<DataTemplate x:Key="MarkerTemplate">
+  <Border BorderBrush="White" BorderThickness="1">
+    <Image Source="{Binding Picture, Converter={StaticResource PictureThumbnailConverter}}"
+            Width="80" Height="80"/>
+  </Border>
+</DataTemplate>
+{% endhighlight %}
+<p>This makes use of a simple value converter which takes a <code>Picture</code> instance and converts it into a <code>BitmapImage </code>which is used as the <code>Source </code>for the image:</p>
+{% highlight csharp %}
+public class PictureThumbnailConverter : IValueConverter
+{
+  public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+  {
+    Picture picture = value as Picture;
+    BitmapImage src = new BitmapImage();
+    src.SetSource(picture.GetThumbnail());
+    return src;
+  }
+
+  public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+  {
+    return null;
+  }
+}
+{% endhighlight %}
+<p>The puhspin clusterer allows you to specify a separate template for clustered pushpins. The <code>DataContext</code> for this template is a list of the <code>DataContexts</code> of the clustered pins that it represents. For this application I created a template which renders what looks like a 'stack' of images. The number of pictures in the cluster is rendered as a <code>TextBlock</code> and the last image in the cluster rendered.</p>
+{% highlight xml %}
+<DataTemplate x:Key="ClusterTemplate">
+  <Grid Width="75" Height="75">
+    <Canvas>
+      <Border Style="{StaticResource FakePhoto}"
+              Canvas.Left="0" Canvas.Top="0"/>
+      <Border Style="{StaticResource FakePhoto}"
+              Canvas.Left="5" Canvas.Top="5"/>
+      <Border BorderBrush="White" BorderThickness="1"
+              Canvas.Left="10" Canvas.Top="10"
+              DataContext="{Binding Path=., Converter={StaticResource LastConverter}}">
+        <Image Source="{Binding Picture, Converter={StaticResource PictureThumbnailConverter}}"
+                Width="60" Height="60"/>
+      </Border>
+      <TextBlock Text="{Binding Count}"
+                  Opacity="0.5"
+                  Canvas.Left="25" Canvas.Top="15"
+                  FontSize="35"/>
+    </Canvas>
+  </Grid>      
+</DataTemplate>
+
+<Style TargetType="Border" x:Key="FakePhoto">
+  <Setter Property="Width" Value="60"/>
+  <Setter Property="Height" Value="60"/>
+  <Setter Property="BorderBrush" Value="White"/>
+  <Setter Property="Background" Value="Black"/>
+  <Setter Property="BorderThickness" Value="1"/>
+</Style>
+{% endhighlight %}
+<p>The code that renders the last image is a bit cunning, it uses a value converter that performs a Linq style 'last' operations, extracting the last items from a collection of objects:</p>
+{% highlight csharp %}
+public class LastConverter : IValueConverter
+{
+  public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+  {
+    IList enumerable = value as IList;
+    return enumerable.Cast<object>().Last();
+  }
+    
+  public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+  {
+    return null;
+  }
+}
+{% endhighlight %}
+<p>This feels quite neat to me :-)</p>
+<p>The clustered pins look like the following, which is a cluster of 5 images around Paris, with the stunning <a href="http://en.wikipedia.org/wiki/Grande_Arche">La Grande Arche de la D&eacute;fense</a> as the image at the top of the cluster:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/01/cluster.jpg" alt="" title="cluster" width="229" height="157" class="aligncenter size-full wp-image-1943" /></p>
+<p>Despite its simplicity, I have had a lot of fun playing with this application. It has certainly encouraged me to take as many photos as possible whenever I go travelling.</p>
+<p>You can download the full sourcecode here: <a href='{{ site.baseurl }}/archive/2012/01/PhotoBrowser.zip'>PhotoBrowser.zip</a></p>
+<p>Regards, Colin E.</p>

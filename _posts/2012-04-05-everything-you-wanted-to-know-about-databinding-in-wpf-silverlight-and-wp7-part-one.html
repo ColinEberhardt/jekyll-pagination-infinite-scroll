@@ -1,0 +1,285 @@
+---
+id: 2072
+author: ceberhardt
+title: "Everything you wanted to know about databinding in WPF, Silverlight and WP7 (Part One)"
+oldlink: "/blog/colin/2012/04/everything-you-wanted-to-know-about-databinding-in-wpf-silverlight-and-wp7-part-one/"
+tags: 
+  - WPF
+  - silverlight
+  - binding
+  - WP7
+  - codeproject
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>OK, so the title is a little ambitious, but there is nothing wrong with setting yourself lofty aims! Because of the depth of this topic I have decided to split this tutorial up into a series of blog posts, each of which explore a different aspect of the binding framework.</p>
+<p>I don't usually write tutorial blog posts and series, preferring instead to develop new controls or novel techniques. However, I really felt this subject needed an in-depth tutorial. Databinding is a fundamental part of the WPF, Silverlight and the Silverlight for Windows Phone 7 frameworks. It is a powerful concept that once mastered allows you to write concise and elegant code. Yet for all its power, it is a little complex and that is my reason for launching into this blog series.</p>
+<p>The rough outline for this series is as follows:</p>
+<ul>
+<li>Part One - Life before binding, INotifyPropertyChanged and creating bindings in code-behind
+<li><a href="http://www.scottlogic.co.uk/blog/colin/2012/04/everything-you-wanted-to-know-about-databinding-in-wpf-silverlight-and-wp7-part-two/">Part Two</a> - The binding markup extensions, the DataContext and path syntax
+<li>Part Three - Other binding sources, ElementName, TemplatedParent, TemplateBinding
+<li>Part Four - Value converters
+<li>Part Five - List binding
+<li>...</ul>
+<h2>Life before binding</h2>
+<p>To understand what databinding is and the service it provides us with, it is worth looking at how you wire-up a user-interface without using databinding. We'll start with a simple model object, or business object, and see how we can take the properties that this object exposes and display them in the UI using standard controls. We will also see how we can respond to event raised by these controls in order to update our model.</p>
+<p>Note, that I am making the assumption that your code will contain some sort of model object. This doesn't have to be the case! You could store your data within the UI controls directly, however this rapidly becomes un-maintainable. There are a whole host of UI patterns that have been developed in order to keep the model and the view separate (MVP, MVC, MVVM etc...)</p>
+<p>We'll look at how to manage the interactions between the model and the view without the help of a binding framework. For our example we'll look at a very simple UI which displays the details of an event, its name and the date of the event:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/figOne.png" alt="" title="figOne" width="250" height="155" class="aligncenter size-full wp-image-2073" /></p>
+<p>The model that supports this view is shown below:</p>
+{% highlight csharp %}
+/// <summary>
+/// A simple model object that represents an event
+/// </summary>
+public class EventModel : INotifyPropertyChanged
+{
+  private string _title;
+
+  /// <summary>
+  /// Gets / sets the event title
+  /// </summary>
+  public string Title
+  {
+    get { return _title; }
+    set
+    {
+      if (value == _title)
+        return;
+
+      _title = value;
+      OnPropertyChanged("Title");
+    }
+  }
+
+  private DateTime _date;
+
+  /// <summary>
+  /// Gets / sets the date of this event
+  /// </summary>
+  public DateTime Date
+  {
+    get { return _date; }
+    set
+    {
+      if (value == _date)
+        return;
+
+      _date = value;
+      OnPropertyChanged("Date");
+    }
+  }
+  
+  public event PropertyChangedEventHandler  PropertyChanged;
+
+  protected void OnPropertyChanged(string propertyName)
+  {
+    if (PropertyChanged != null)
+    {
+      PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
+    }
+  }
+}
+{% endhighlight %}
+<p>In our case the model implements <code>INotifyPropertyChanged</code>, allowing us to detect changes in its properties. We will use this to update the view when the model changes.</p>
+<p>The view has the following XAML (with the various layout properties omitted for clarity):</p>
+{% highlight xml %}
+<TextBlock Text="Name:"/>
+<TextBox x:Name="EventTitle"
+          TextChanged="EventTitle_TextChanged"
+
+<TextBlock Text="Date:"/>
+<sdk:DatePicker x:Name="EventDate"
+                SelectedDateChanged="EventDate_SelectedDateChanged"/>
+
+<Button Content="Modify Event"
+        Click="Button_Click"/>
+{% endhighlight %}
+<p>The code-behind that supports this view is given below:</p>
+{% highlight csharp %}
+public partial class MainPage : UserControl
+{
+  private EventModel _event;
+
+  public MainPage()
+  {
+    InitializeComponent();
+
+    // create a model object
+    _event = new EventModel()
+    {
+      Date = new DateTime(2011, 7, 1),
+      Title = "Silverlight User Group"
+    };
+
+    // copy our model object state to the UI
+    EventDate.SelectedDate = _event.Date;
+    EventTitle.Text = _event.Title;
+
+    // 'listen' to changes in the model
+    _event.PropertyChanged += Event_PropertyChanged;
+  }
+
+  /// <summary>
+  /// Handles changes in the model, reflecting this change in the UI (view)
+  /// </summary>
+  private void Event_PropertyChanged(object sender, PropertyChangedEventArgs e)
+  {
+    if (e.PropertyName == "Title")
+    {
+      EventTitle.Text = _event.Title;
+    }
+    if (e.PropertyName == "Date")
+    {
+      EventDate.SelectedDate = _event.Date;
+    }
+  }
+
+  /// <summary>
+  /// Handles the TextChanged event updating the model accordingly
+  /// </summary>
+  private void EventTitle_TextChanged(object sender, TextChangedEventArgs e)
+  {
+    _event.Title = EventTitle.Text;
+  }
+
+  /// <summary>
+  /// Handles the SelectedDateChanged event updating the model accordingly
+  /// </summary>
+  private void EventDate_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+  {
+    _event.Date = EventDate.SelectedDate.Value;
+  }
+
+  private void Button_Click(object sender, RoutedEventArgs e)
+  {
+    // make some change to our event
+    _event.Title = _event.Title.ToLower();
+    _event.Date = _event.Date.AddDays(1);
+  }
+}
+{% endhighlight %}
+<p>In order to wire-up the model with our view, the above code performs the following distinct tasks for each of the model's properties:</p>
+<ol>
+<li>Sets the state of the UI controls to the initial state of the model. In the above example this is done in the constructor.
+<li>Subscribes to the event that the UI control exposes to indicate a change in state. For the <code>TextBox</code> this is the <code>TextChanged</code> event, for the <code>DatePicker </code>this is the <code>SelectedDateChanged</code> event. When a change occurs, the UI state used to update the mode.
+<li>Subscribes to PropertyChanged events from the model object. The handler for this event detects the property that has changed and updates the state of the corresponding UI control.</ol>
+<p>If we consider the model object to be the source of the data and the UI control to be the target. We can see that we have three separate flows of data:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/bindingLifecycle.png" alt="" title="bindingLifecycle" width="400" height="372" class="aligncenter size-full wp-image-2074" /></p>
+<p>The code for each of these three steps is distributed throughout our code, in the constructor and a variety of event handler. For each model property that we wish to expose to our user via the view, we have to add code to perform each of these three tasks. This leads to code that is hard to maintain and dataflow that are hard to trace.</p>
+<h2>Databinding - less code, greater clarity</h2>
+<p>Databinding provides an alternative to the manual coupling of the model to the UI controls in our view. The idea being that the binding framework takes care of all three of the tasks above. We simply state that we wish to synchronise a model property with a property of a UI control, and it does the rest. Our complex diagram above simply becomes the following:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/binding.png" alt="" title="binding" width="600" height="111" class="aligncenter size-full wp-image-2075" /></p>
+<p>Changes in the source property values are pushed to the target property by the binding framework, and (optionally) changes in the target are pushed to the source.</p>
+<p>Modifying the code for our example to use the WPF / Silverlight framework results in the following code:</p>
+{% highlight csharp %}
+public MainPage()
+{
+  InitializeComponent();
+
+  // create a model object
+  _event = new EventModel()
+  {
+    Date = new DateTime(2011, 7, 1),
+    Title = "Silverlight User Group"
+  };
+
+  // bind the Date to the UI
+  EventDate.SetBinding(DatePicker.SelectedDateProperty, new Binding("Date")
+  {
+    Source = _event,
+    Mode = BindingMode.TwoWay
+  });
+
+  // bind the Title to the UI
+  EventTitle.SetBinding(TextBox.TextProperty, new Binding("Title")
+  {
+    Source = _event,
+    Mode = BindingMode.TwoWay
+  });
+}
+{% endhighlight %}
+<p>This is a big improvement on the previous 'manual' example where three separate event handlers were required to maintain synchronization between the model and the view. Databinding allows us to declare how the model is connected to the view, with the databinding framework taking care of the mechanics.</p>
+<p>We'll take a closer look at the databinding syntax in order to understand its various component parts. We can highlight these components by re-writing one of the bindings as follows:</p>
+{% highlight csharp %}
+FrameworkElement targetObject = EventTitle;
+DependencyProperty targetProperty = TextBox.TextProperty;
+object sourceObject = _event;
+string sourceProperty = "Title";
+
+var binding = new Binding(sourceProperty)
+{
+  Source = sourceObject,
+  Mode = BindingMode.TwoWay
+};
+targetObject.SetBinding(targetProperty, binding);
+{% endhighlight %}
+<p>From the above we can clearly see the following components:</p>
+<ul>
+<li>The <strong>source object</strong> - this is the object which contains the data which we want to render within the UI
+<li>The <strong>source property</strong> - the property of the above object which we wish to render
+<li>The <strong>target object</strong> - this is a UI control which has a property which we are going to use to display our model property
+<li>The <strong>target property</strong> - the property of the UI control which visualises our data
+<li>The <strong>binding </strong>- this is used to indicate the source and source property, together with other information relating to the binding like the direction of data flow, value converters etc... (more on these later).
+<li><strong>SetBinding</strong> - this is the method used to associate a databinding with a specific property on the target. Note that the first argument is the dependency property that is defined on TextBox and is public static. </ul>
+<p>Once a binding has been created and associated with a dependency property, the initial value is propagated from the source to the target. Following this, if the source object implements <code>INotifyPropertyChanged</code>, subsequent changes in the source property value are automatically propagated. If a <code>BindingMode.TwoWay</code> binding is used, changes to the target property, which typically occur due to user interactions, are propagated from the target to the source.</p>
+<h2>A brief digression into dependency properties</h2>
+<p>As you can see from the above, databinding is a feature of WPF and Silverlght dependency property mechanism. The type of properties that developers are used to from other .NET languages are typically termed 'CLR properties' (Where CLR refers to the Common Language Runtime) so that we know which type of property we are talking about!</p>
+<p>CLR properties are simply shorthand for methods used to access a backing field. You cannot use the databinding framework to bind together two CLR properties. Dependency properties are something much more powerful, they provide property inheritance within the visual tree, animation support, precedence rules, coercion and, most importantly for the purposes of this article, databinding.</p>
+<p>In the example below, a dependency property 'TotalGoals' is defined on a dependency object. By convention, this dependency property is exposed as a public static field on the dependency object. It is this static field that we use to identify the dependency property when binding to it:</p>
+{% highlight csharp %}
+public class MatchResult : DependencyObject
+{
+  /// <summary>
+  /// Identifies the TotalGoals Dependency Property.
+  /// <summary>
+  public static readonly DependencyProperty TotalGoalsProperty =
+      DependencyProperty.Register("TotalGoals", typeof(int),
+      typeof(MatchResult), new PropertyMetadata(0));
+
+}
+{% endhighlight %}
+<p>Once a dependency property has been defined, its value can be get / set via the GetValue / SetValue methods:</p>
+{% highlight csharp %}
+var result = new MatchResult();
+// set the property
+result.SetValue(MatchResult.TotalGoalsProperty, 10);
+
+// get the property
+Debug.WriteLine(result.GetValue(MatchResult.TotalGoalsProperty))
+{% endhighlight %}
+<p>Because the syntax to get or set a dependency property is not terribly friendly, using the <code>GetValue </code>/ <code>SetValue </code>methods, dependency objects typically provide CLR properties that wrap the dependency property access, providing a better API for manipulating the state form code-behind.</p>
+{% highlight csharp %}
+/// <summary>
+/// Gets or sets the total score. This is a dependency property.
+/// </summary>
+public int TotalScore
+{
+  set
+  {
+    SetValue(MatchResult.TotalGoalsProperty, value);
+  }
+  get
+  {
+    return (int)GetValue(MatchResult.TotalGoalsProperty);
+  }
+}
+{% endhighlight %}
+<p>However, this is purely convention.</p>
+<p>Whilst the target for a binding must be a dependency property (which must be defined on a dependency object), the source can be either a dependency property or a CLR property. In practice, unless you are creating your own controls, you will not need to create your own dependency properties. Instead, you will be binding your model to the properties of the various UI elements that are supplied with the WPF / Silverlight frameworks, for example <code>TextBlock.Text</code>. These are all dependency properties.</p>
+<h2>A quick note about INotifyPropertyChanged</h2>
+<p>Whilst dependency properties always notify the binding framework of any changes in value, CLR properties only notify of changes if the class which the belong to implements the <code>INotifyPropertyChanged</code> interface (as the class used in the example above does). It is not mandatory that you implement this interface, or raise the <code>PropertyChanged </code>event, for properties that your bind to your UI. However, if you do not, the binding framework will only perform a one-time update, pushing the property value from source to target at the point when the binding is created.</p>
+<h2>BindingModes</h2>
+<p>You can specify which direction you want property changes to propagate by setting the <code>BindingMode </code>on a binding. This is probably easiest to illustrate with a simple diagram:</p>
+<p><img src="{{ site.baseurl }}/archive/2012/04/bindingModes.png" alt="" title="bindingModes" width="500" height="298" class="aligncenter size-full wp-image-2076" /></p>
+<p><code>OneWay </code>bindings only propagate changes in the source value to the target (assuming the source implements <code>INotifyPropertyChanged</code>), whereas a <code>TwoWay</code> binding propagates changes in both directions, ensuring that the two values are always synchronized. There are a few other binding modes (<code>OneWayToSource</code>, <code>OneTime</code>...) but one / two way are by far the most commonly used.</p>
+<p><strong>WARNING</strong>: The default <code>BindingMode </code>for Silverlight is <code>OneWay</code>, whereas in WPF it is <code>BindingMode.Default</code> which means ... it depends! <a href="http://msdn.microsoft.com/en-us/library/system.windows.data.bindingmode.aspx">From MSDN</a>:</p>
+<blockquote><p>"The default value varies for each dependency property. In general, user-editable control properties, such as those of text boxes and check boxes, default to two-way bindings, whereas most other properties default to one-way bindings."</p></blockquote>
+<p>This is very confusing if you are writing cross-platform WPF / Silverlight code! In this case I would always recommend specifying the <code>BindingMode </code>explicity.</p>
+<h2>Summary</h2>
+<p>So far we have seen what life was like before databinding, where we had to write code to handle changes from both the source and target properties, manually synchronizing the two. With binding, the framework handles this for us, allowing for a more declarative approach to wiring-up our UI to the model that backs it (you do have a model behind your view don't you?!).</p>
+<p>However, you might be wondering why there has been no mention of binding in XAML yet? This was intentional, I wanted to first show how bindings work under-the-hood, introducing the concept of source and target, before leaping into creating them in XAML ... which is the subject of the next blog post ...</p>
+<p>You can download the example code here: <a href='{{ site.baseurl }}/archive/2012/04/BindingExamples.zip'>BindingExamples.zip</a></p>
+<p>Regards, Colin E.</p>

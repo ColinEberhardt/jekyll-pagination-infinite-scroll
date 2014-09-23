@@ -1,0 +1,97 @@
+---
+id: 1950
+author: ceberhardt
+title: "WP7 PhoneGap Backbutton Support Re-visited"
+oldlink: "/blog/colin/2012/01/wp7-phonegap-backbutton-support-re-visited/"
+tags: 
+  - blog
+  - windowsphone
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p>About a month ago I published an article which demonstrated how to <a href="http://www.scottlogic.co.uk/blog/colin/2011/12/a-simple-multi-page-windows-phone-7-phonegap-example/" title="A Simple Multi-Page Windows Phone 7 PhoneGap Example">create a WP7 application using static HTML pages and PhoneGap</a>. Whilst PhoneGap makes the packaging of HTML / JavaScript / CSS and images into a breeze, one thing it doesn't do is provide correct back-button support. Correct back-button support is a mandatory requirement for marketplace certification. Hitting the back button should navigate back through the various screens of an application. Hitting the back-button on the first screen should terminate the application. </p>
+<p>The solution I published previously handles the WP7 back keypress in order to keep track of the back-stack depth. When the back-stack depth is just one, a back-button press exits the application. This works fine if backwards navigation is always controlled via the hardware back-button, however if your application has HTML anchor elements that navigate back to a previous page, or you use code such as <code>javascript:history.go(-1)</code>, this back-stack handling code will not detect that a backwards navigation has occurred.</p>
+<p><em>As an aside, WP7 applications really should use the hardware back-button for navigation. If you are writing a cross-platform PhoneGap application consider adapting your UI for each platform. This means removing the back-button you woudl have in your iOS version when 'skinning' for WP7.</em></p>
+<p>In order to solve this issue I have updated the code to inspect the URL that the browser control is navigating to in order to detect backwards navigation. The class now maintains a list of URLs, which represent the navigation stack. This allows it to detect a backwards navigation.</p>
+{% highlight csharp %}
+/// <summary>
+/// Handles the back-button for a PhoneGap application. When the back-button
+/// is pressed, the browser history is navigated. If no history is present,
+/// the application will exit.
+/// </summary>
+public class BackButtonHandler
+{
+  private WebBrowser _browser;
+
+  private List<string> _backStack = new List<string>();
+
+  public BackButtonHandler(PhoneApplicationPage page, PGView phoneGapView)
+  {
+    // subscribe to the hardware back-button
+    page.BackKeyPress += Page_BackKeyPress;
+
+    _browser = phoneGapView.Browser;
+
+    // handle navigation events
+    _browser.Navigated += Browser_Navigated;
+
+  }
+
+  /// <summary>
+  /// Handle navigation in order to update our back-stack
+  /// </summary>
+  private void Browser_Navigated(object sender, NavigationEventArgs e)
+  {
+    string url = _browser.Source.OriginalString;
+
+    // ensure all slashes are the same
+    // app\www/index.html
+    // see: https://issues.apache.org/jira/browse/CB-184
+    url = url.Replace("\\", "/");
+
+    if (_backStack.Count < 2)
+    {
+      _backStack.Add(url);
+    }
+    else
+    {
+      // check whether the URL represents a backwards navigation
+      string previousPage = _backStack[_backStack.Count - 2];
+      if (previousPage == url)
+      {
+        _backStack.RemoveAt(_backStack.Count - 1);
+      }
+    }
+  }
+
+  /// <summary>
+  /// Handle the hardware back-button
+  /// </summary>
+  private void Page_BackKeyPress(object sender, CancelEventArgs e)
+  {
+    // if we have items in the back-stack, route this event
+    // to the browser
+    if (_backStack.Count > 1)
+    {
+      _browser.InvokeScript("eval", "history.go(-1)");
+      e.Cancel = true;
+    }
+  }
+}
+{% endhighlight %}
+<p>Note: There use of <code>url.Replace("\\", "/")</code>, this is due to a minor issue with the PhoneGap WP7 native code, which I have raised in the Callback JIRA (<a href="https://issues.apache.org/jira/browse/CB-184">CB-184</a>).</p>
+<p>To use this code simply create an instance of the class, passing the PGView (the PhoneGap user control) into teh constructor:</p>
+{% highlight csharp %}
+public MainPage()
+{
+  InitializeComponent();
+
+  new BackButtonHandler(this, PGView);
+}
+{% endhighlight %}
+<p>Because back-button handling is a mandatory requirement for WP7 applications, hopefully Nitobi will incorporate this code (or similar) into the <a href="https://build.phonegap.com/apps">PhoneGap Build service</a> (which I tried earlier this week - it is pretty amazing!)</p>
+<p>You can download a working example here: <a href='{{ site.baseurl }}/archive/2012/01/HTML5SandwichFlow1.zip'>HTML5SandwichFlow.zip</a></p>
+<p>(The first three recipe pages have 'back' anchor elements, two use the URL, one uses JavaScript)</p>
+<p>Regards,Colin E.</p>

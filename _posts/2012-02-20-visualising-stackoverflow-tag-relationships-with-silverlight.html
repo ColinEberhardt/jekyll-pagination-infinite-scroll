@@ -1,0 +1,41 @@
+---
+id: 1996
+author: ceberhardt
+title: Visualising StackOverflow Tag Relationships with Silverlight
+oldlink: "/blog/colin/2012/02/visualising-stackoverflow-tag-relationships-with-silverlight/"
+tags: 
+  - charts
+  - silverlight
+  - visualisation
+  - blog
+categories: 
+  - ceberhardt
+layout: default_post
+source: wordpress
+---
+<p><strong>UPDATE:</strong> I have <a href="http://www.codeproject.com/Articles/342715/Plotting-Circular-Relationships-Graphs-with-Silver">posted the sourcecode for this control on codeproject</a>.</p>
+<p>Recently I have been wondering about the wealth of information that can be gleaned from the 2.5 million programming question on Stack Overflow. A few weeks back I found a <a href="http://meta.stackoverflow.com/questions/41450/interactive-tag-trend-comparison-page">tag trending tool</a>, which can be used to measure the rise and fall in popularity of tags over time. Whilst this is a great little tool, I am sure there is much more that can be done with the freely available Stack Overflow data, for example, exploring the relationships between the many technologies people ask questions about.</p>
+<div style="text-align: center;"><object width="550" height="500" data="data:application/x-silverlight," type="application/x-silverlight-2" ><param name="source" value="{{ site.baseurl }}/archive/2012/02/StackOverflowTagRelationship.xap"/><a href="http://go.microsoft.com/fwlink/?LinkID=124807"  style="text-decoration: none;"> <img src="http://go.microsoft.com/fwlink/?LinkId=108181" alt="Get Microsoft Silverlight" style="border-style: none"/></a></object></div>
+<p>On a recent trip to Copenhagen I decided to put my hours of travelling time to good use and create a Silverlight application that plots the relationships between the various tags. I created an application that downloaded the 1,000 most recent questions via <a href="http://api.stackoverflow.com/1.0/help">the Stack Overflow API</a> and plotted the relationships between the 20 most popular tags, as seen above.</p>
+<p>The graph is constructed as follows:</p>
+<ul>
+<li>The size of each segment is proportional to the number of questions relating to the tag, i.e. android and java are the most popular tags.</li>
+<li>Connections between tags indicate questions that have been tagged with both technologies. The thickness of the connection indicates how many questions share these two tags, i.e. jQuery and JavaScript tags appear together quite often.</li>
+<li> Each segment is coloured based on the number of connections it has, red for many connections, blue for few.</li>
+</ul>
+<p>The ordering of segments can be changed using the drop-down control. Probably one of the most interesting views is the one where related tags are clustered. This is done by assigning a 'weight' to the current configuration of the graph by summing the length of all connections, with connections that cross the centre of the circle adding most weight. An iterative process is used to minimise the overall graph weight by moving each segment a few steps left and right, until the least 'weighty' configuration is found. This is the one where each tag is most closely related to its neighbours.</p>
+<p><img src="{{ site.baseurl }}/archive/2012/02/cluster.png" alt="" title="cluster" width="182" height="138" style="float:right; margin:10px" /> When clustering is applied we can see small 'pockets' of related technologies, with the following patterns emerging</p>
+<ul>
+<li>The two most popular tags, <strong>Java</strong> and <strong>Android</strong>, are very closely related to each other, but have very few other relationships.</li>
+<li><strong>iOS</strong>, <strong>Objective-C</strong> and <strong>iPhone</strong> form a close-knit group. However, <strong>Objective-C</strong> questions are sometimes also tagged with <strong>C#</strong>, <strong>C</strong> and <strong>C++</strong>.</li>
+<li><strong>C#</strong>, <strong>.NET</strong> and <strong>ASP.NET</strong> are clustered, however C# has links with many other tags</li>
+<li>The strongest relationship is between <strong>jQuery</strong> and <strong>JavaScript</strong>, probably due to jQuery having become the de-facto framework for JavaScript development, being used <a href="http://trends.builtwith.com/javascript/JQuery">on 53% of websites</a>. </li>
+<li>There is a large cluster of connected web technologies, <strong>CSS</strong>, <strong>HTML</strong>, <strong>JavaScript</strong>, <strong>jQuery</strong>, reflecting the mix of technologies involved in creating web sites and web applications.</li>
+<li><strong>Python</strong>, whilst being a popular tag, has very few relationships, only being weakly linked to <strong>PHP</strong>.</li>
+</ul>
+<p>I am planning on tidying up the code for this visualisation, making it more generic, allowing it to be used to graph other datasets. Let me know if you are interested in this!</p>
+<p>Here is the same graph, but showing the top 30 tags, again, more interesting relationships start to emerge:</p>
+<div style="text-align: center;"><object width="550" height="500" data="data:application/x-silverlight," type="application/x-silverlight-2" ><param name="source" value="{{ site.baseurl }}/archive/2012/02/StackOverflowTagRelationship2.xap"/><a href="http://go.microsoft.com/fwlink/?LinkID=124807"  style="text-decoration: none;"> <img src="http://go.microsoft.com/fwlink/?LinkId=108181" alt="Get Microsoft Silverlight" style="border-style: none"/></a></object></div>
+<p>Finally, thanks to <a href="http://www.scottlogic.co.uk/blog/chris/">Chris P.</a>, Adrian C. and <a href="http://www.scottlogic.co.uk/blog/graham/">Graham O.</a> for their ideas and input!</p>
+<p>Regards, Colin E.</p>
+<div style="clear:both">&nbsp;</div>
