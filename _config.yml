@@ -1,4 +1,3 @@
-siteurl: http://dev.scottlogic.co.uk/~ceberhardt/jekyll-pagination-infinite-scroll/_site
+siteurl: http://colineberhardt.github.io/jekyll-pagination-infinite-scroll
 markdown: maruku
-pygments: false
 paginate: 10
